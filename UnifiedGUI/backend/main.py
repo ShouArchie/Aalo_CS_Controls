@@ -268,6 +268,7 @@ async def get_temperature_at_point(x: int, y: int):
     """Get temperature value at specific pixel coordinates from HT301."""
     if isinstance(thermal_stream, HT301Stream):
         try:
+            # No rotation - coordinates map directly
             temp = thermal_stream.capture.get_temperature_at_point(x, y)
             return {"temperature": temp, "x": x, "y": y, "unit": "C"}
         except Exception as e:
