@@ -9,6 +9,14 @@ import queue
 from pathlib import Path
 import sys
 
+# Import robot control
+try:
+    from robot_control import robot_controller
+    print("✓ Robot control system imported")
+except ImportError as e:
+    print(f"✗ Robot control import failed: {e}")
+    robot_controller = None
+
 # ---- include HT301 capture from existing Python_GUI stack ----
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PY_GUI_DIR = ROOT_DIR / 'Python_GUI'
@@ -44,6 +52,19 @@ app = FastAPI()
 class TempRangeRequest(BaseModel):
     min_temp: float
     max_temp: float
+
+class RobotConnectionRequest(BaseModel):
+    ip: str
+
+class RobotMoveRequest(BaseModel):
+    direction: str
+    distance: float = 0.05
+
+class ThermalTrackingRequest(BaseModel):
+    enabled: bool
+
+class HomeJointsRequest(BaseModel):
+    joints: list[float]  # Joint angles in degrees
 
 # Allow all origins for local setup (laptop-only deployment)
 app.add_middleware(
@@ -528,4 +549,89 @@ async def manual_calibration():
         except Exception as e:
             return {"error": str(e), "success": False}
     else:
-        return {"error": "Manual calibration only available with HT301 camera", "success": False} 
+        return {"error": "Manual calibration only available with HT301 camera", "success": False}
+
+
+# ===== ROBOT CONTROL API ENDPOINTS =====
+
+@app.post("/api/robot/connect")
+async def connect_robot(request: RobotConnectionRequest):
+    """Connect to UR10e robot at specified IP address."""
+    if robot_controller is None:
+        return {"connected": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.connect(request.ip)
+    return result
+
+@app.post("/api/robot/disconnect")
+async def disconnect_robot():
+    """Disconnect from UR10e robot."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.disconnect()
+    return result
+
+@app.post("/api/robot/home")
+async def move_robot_home():
+    """Move robot to home position."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.move_to_home()
+    return result
+
+@app.post("/api/robot/move")
+async def move_robot_manual(request: RobotMoveRequest):
+    """Manual robot movement in specified direction."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.move_manual(request.direction, request.distance)
+    return result
+
+@app.post("/api/robot/thermal-tracking")
+async def toggle_thermal_tracking(request: ThermalTrackingRequest):
+    """Toggle thermal tracking on/off."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    if request.enabled:
+        result = robot_controller.start_thermal_tracking()
+    else:
+        result = robot_controller.stop_thermal_tracking()
+    
+    return result
+
+@app.get("/api/robot/status")
+async def get_robot_status():
+    """Get current robot status and position."""
+    if robot_controller is None:
+        return {
+            "connected": False,
+            "error": "Robot controller not available",
+            "position": "UNKNOWN",
+            "thermal_tracking": False,
+            "spacemouse_connected": False
+        }
+    
+    status = robot_controller.get_status()
+    return status
+
+@app.post("/api/robot/home-joints")
+async def move_robot_home_joints(request: HomeJointsRequest):
+    """Move robot to specific joint angles (home joints)."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.move_to_joint_angles(request.joints)
+    return result
+
+@app.post("/api/robot/config/home-joints")
+async def update_home_joints_config(request: HomeJointsRequest):
+    """Update the home joints configuration."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.update_home_joints_config(request.joints)
+    return result 

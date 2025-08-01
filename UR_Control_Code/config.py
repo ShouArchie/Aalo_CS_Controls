@@ -18,14 +18,10 @@ THERMAL_CAMERA_FPS = 25
 
 # === ROBOT STARTING POSITION (in radians) ===
 import math
-START_JOINTS = [
-    0.0,                    # Base = 0°
-    math.radians(-60),      # Shoulder = -60°
-    math.radians(80),       # Elbow = 80°
-    math.radians(-110),     # Wrist1 = -110°
-    math.radians(270),      # Wrist2 = 270°
-    math.radians(-90)       # Wrist3 = -90°
-]
+HOME_DEG = [206.06, -66.96, 104.35, 232.93, 269.26, 118.75]
+_rad = math.radians
+
+START_JOINTS = [_rad(a) for a in HOME_DEG]
 
 # === PID CONTROLLER PARAMETERS ===
 # Face tracking PID gains

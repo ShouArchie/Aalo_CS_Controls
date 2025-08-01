@@ -92,33 +92,7 @@ export default function CameraPanel({
           style={{ aspectRatio: '4/3', height: 'calc((100vh - 160px) / 2.2)', objectFit: 'contain' }}
         />
         
-        {/* Tactical Overlay Grid */}
-        <div className="absolute inset-0 pointer-events-none">
-          <svg className="w-full h-full opacity-20" viewBox="0 0 400 300">
-            {/* Corner markers */}
-            <g stroke="#FFA200" strokeWidth="1" fill="none">
-              <path d="M10,10 L30,10 M10,10 L10,30" />
-              <path d="M370,10 L390,10 M390,10 L390,30" />
-              <path d="M10,270 L30,270 M10,270 L10,290" />
-              <path d="M370,270 L390,270 M390,270 L390,290" />
-            </g>
-            
-            {/* Center crosshair */}
-            <g stroke="#FFA200" strokeWidth="1" opacity="0.4">
-              <line x1="190" y1="140" x2="210" y2="140" />
-              <line x1="200" y1="130" x2="200" y2="170" />
-              <circle cx="200" cy="150" r="20" fill="none" />
-            </g>
-            
-            {/* Grid lines */}
-            <g stroke="#FFA200" strokeWidth="0.5" opacity="0.2">
-              <line x1="133" y1="0" x2="133" y2="300" />
-              <line x1="267" y1="0" x2="267" y2="300" />
-              <line x1="0" y1="100" x2="400" y2="100" />
-              <line x1="0" y1="200" x2="400" y2="200" />
-            </g>
-          </svg>
-        </div>
+
 
         {/* Temperature Data Overlay */}
         {isThermal && (

@@ -1,6 +1,7 @@
 "use client";
 import CameraPanel from '@components/CameraPanel';
 import SettingsPopup from '@components/SettingsPopup';
+import JointConfigPopup from '@components/JointConfigPopup';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -11,6 +12,17 @@ export default function Dashboard() {
   const [filterEnabled, setFilterEnabled] = useState(false);
   const [tempRange, setTempRange] = useState({ min: 0, max: 50 });
   const [colorPalette, setColorPalette] = useState('PLASMA');
+  
+  // Robot control states
+  const [robotIp, setRobotIp] = useState('192.168.10.255');
+  const [robotConnected, setRobotConnected] = useState(false);
+  const [robotStatus, setRobotStatus] = useState('DISCONNECTED');
+  const [robotPosition, setRobotPosition] = useState('UNKNOWN');
+  const [thermalTracking, setThermalTracking] = useState(false);
+  
+  // Home joint configuration (in degrees)
+  const [homeJoints, setHomeJoints] = useState([206.06, -66.96, 104.35, 232.93, 269.26, 118.75]);
+  const [showJointConfig, setShowJointConfig] = useState(false);
 
   const wsBase = typeof window !== 'undefined'
     ? `ws://${window.location.hostname}:8000`
@@ -119,6 +131,115 @@ export default function Dashboard() {
     }
   };
 
+  // Robot control functions
+  const connectRobot = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/robot/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: robotIp })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRobotConnected(data.connected);
+        setRobotStatus(data.connected ? 'CONNECTED' : 'FAILED');
+        console.log('Robot connection:', data);
+      }
+    } catch (error) {
+      console.error('Failed to connect robot:', error);
+      setRobotStatus('ERROR');
+    }
+  };
+
+  const disconnectRobot = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/robot/disconnect', {
+        method: 'POST'
+      });
+      if (response.ok) {
+        setRobotConnected(false);
+        setRobotStatus('DISCONNECTED');
+        setThermalTracking(false);
+      }
+    } catch (error) {
+      console.error('Failed to disconnect robot:', error);
+    }
+  };
+
+  const moveToHome = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/robot/home', {
+        method: 'POST'
+      });
+      if (response.ok) {
+        setRobotPosition('HOME');
+      }
+    } catch (error) {
+      console.error('Failed to move to home:', error);
+    }
+  };
+
+  const moveToHomeJoints = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/robot/home-joints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ joints: homeJoints })
+      });
+      if (response.ok) {
+        setRobotPosition('HOME_JOINTS');
+      }
+    } catch (error) {
+      console.error('Failed to move to home joints:', error);
+    }
+  };
+
+  const updateHomeJoints = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/robot/config/home-joints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ joints: homeJoints })
+      });
+      if (response.ok) {
+        console.log('Home joints configuration updated');
+        setShowJointConfig(false);
+      }
+    } catch (error) {
+      console.error('Failed to update home joints config:', error);
+    }
+  };
+
+  const toggleThermalTracking = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/robot/thermal-tracking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !thermalTracking })
+      });
+      if (response.ok) {
+        setThermalTracking(!thermalTracking);
+      }
+    } catch (error) {
+      console.error('Failed to toggle thermal tracking:', error);
+    }
+  };
+
+  const moveRobot = async (direction: string, distance: number = 0.05) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/robot/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction, distance })
+      });
+      if (!response.ok) {
+        console.error('Failed to move robot');
+      }
+    } catch (error) {
+      console.error('Failed to move robot:', error);
+    }
+  };
+
   return (
     <main className="min-h-screen relative overflow-hidden">
       {/* Background Grid */}
@@ -158,8 +279,8 @@ export default function Dashboard() {
       {/* Main Content Grid */}
       <div className="p-2 h-[calc(100vh-80px)]">
         <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 h-full">
-          {/* Camera Feeds - Far Left Side */}
-          <div className="lg:col-span-2 space-y-3 relative pl-0">
+          {/* Camera Feeds - Left Side */}
+          <div className="lg:col-span-2 space-y-3 relative">
             {/* 3D Background Effect */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-10">
               <div className="robotic-hand-container">
@@ -213,12 +334,12 @@ export default function Dashboard() {
             </div>
 
             {/* RGB Camera */}
-            <div className="tactical-panel p-3 rounded relative z-10">
+            <div className="bg-black rounded p-3 relative z-10">
               <CameraPanel title="RGB Camera" wsUrl={`${wsBase}/ws/rgb`} />
             </div>
 
             {/* Thermal Camera */}
-            <div className="tactical-panel p-3 rounded relative z-10">
+            <div className="bg-black rounded p-3 relative z-10">
               <CameraPanel 
                 title="Thermal Camera" 
                 wsUrl={`${wsBase}/ws/thermal`} 
@@ -369,45 +490,112 @@ export default function Dashboard() {
             </div>
 
             {/* Robot Controls - Dynamic Section */}
-            <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-3 space-y-3">
+            <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-3 space-y-4">
               <div className="flex items-center gap-2">
-                <div className="status-indicator bg-warning"></div>
-                <h3 className="text-sm font-tactical text-accent font-medium">Robot Status</h3>
+                <div className={`status-indicator ${robotConnected ? 'bg-success' : 'bg-warning'}`}></div>
+                <h3 className="text-sm font-tactical text-accent font-medium">UR10e Robot Control</h3>
               </div>
               
-              <div className="grid grid-cols-2 gap-3">
-                {/* Status */}
-                <div className="space-y-1 text-xs font-mono">
+              {/* Robot IP Configuration */}
+              <div className="space-y-2">
+                <label className="text-xs text-text-secondary">Robot IP Address</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={robotIp}
+                    onChange={(e) => setRobotIp(e.target.value)}
+                    placeholder="192.168.10.255"
+                    className="text-xs bg-surface-dark border-accent/30 text-text-primary"
+                  />
+                  <button 
+                    onClick={robotConnected ? disconnectRobot : connectRobot}
+                    className={`tactical-button px-3 py-1 rounded text-xs ${robotConnected ? 'bg-danger hover:bg-danger/80' : ''}`}
+                  >
+                    {robotConnected ? 'DISCONNECT' : 'CONNECT'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Robot Status */}
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-text-secondary">Connection:</span>
-                    <span className="text-warning">STANDBY</span>
+                    <span className="text-text-secondary">Status:</span>
+                    <span className={robotConnected ? 'text-success' : 'text-warning'}>{robotStatus}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-secondary">Position:</span>
-                    <span className="text-text-primary">HOME</span>
+                    <span className="text-text-primary">{robotPosition}</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Thermal Track:</span>
+                    <span className={thermalTracking ? 'text-success' : 'text-text-secondary'}>
+                      {thermalTracking ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-secondary">Mode:</span>
                     <span className="text-text-primary">MANUAL</span>
                   </div>
                 </div>
-
-                {/* Quick Actions */}
-                <div className="space-y-1">
-                  <button 
-                    onClick={manualCalibration}
-                    className="tactical-button w-full py-1 px-2 rounded text-xs"
-                  >
-                    CALIBRATE
-                  </button>
-                  <button className="tactical-button w-full py-1 px-2 rounded text-xs">
-                    SNAPSHOT
-                  </button>
-                  <button className="tactical-button w-full py-1 px-2 rounded text-xs">
-                    RESET
-                  </button>
-                </div>
               </div>
+
+              {/* Robot Controls */}
+              {robotConnected && (
+                <div className="space-y-3">
+                  {/* Tracking Controls */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-text-secondary">Thermal Tracking</span>
+                    <Switch 
+                      checked={thermalTracking}
+                      onCheckedChange={toggleThermalTracking}
+                    />
+                  </div>
+
+                  {/* Movement Controls */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs text-accent font-tactical">Manual Movement</h4>
+                    <div className="grid grid-cols-3 gap-1">
+                      {/* Translation Controls */}
+                      <button onClick={() => moveRobot('x+', 0.05)} className="tactical-button py-1 px-2 text-xs">+X</button>
+                      <button onClick={() => moveRobot('y+', 0.05)} className="tactical-button py-1 px-2 text-xs">+Y</button>
+                      <button onClick={() => moveRobot('z+', 0.05)} className="tactical-button py-1 px-2 text-xs">+Z</button>
+                      <button onClick={() => moveRobot('x-', 0.05)} className="tactical-button py-1 px-2 text-xs">-X</button>
+                      <button onClick={() => moveRobot('y-', 0.05)} className="tactical-button py-1 px-2 text-xs">-Y</button>
+                      <button onClick={() => moveRobot('z-', 0.05)} className="tactical-button py-1 px-2 text-xs">-Z</button>
+                    </div>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={moveToHome}
+                      className="tactical-button py-1 px-2 rounded text-xs"
+                    >
+                      HOME POS
+                    </button>
+                    <button 
+                      onClick={moveToHomeJoints}
+                      className="tactical-button py-1 px-2 rounded text-xs"
+                    >
+                      HOME JOINTS
+                    </button>
+                    <button 
+                      onClick={manualCalibration}
+                      className="tactical-button py-1 px-2 rounded text-xs"
+                    >
+                      CALIBRATE
+                    </button>
+                    <button 
+                      onClick={() => setShowJointConfig(true)}
+                      className="tactical-button py-1 px-2 rounded text-xs"
+                    >
+                      CONFIG JOINTS
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -416,6 +604,14 @@ export default function Dashboard() {
       <SettingsPopup 
         isOpen={showSettings} 
         onClose={() => setShowSettings(false)} 
+      />
+
+      <JointConfigPopup
+        isOpen={showJointConfig}
+        onClose={() => setShowJointConfig(false)}
+        homeJoints={homeJoints}
+        onUpdate={setHomeJoints}
+        onSave={updateHomeJoints}
       />
     </main>
   );
