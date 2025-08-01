@@ -59,12 +59,38 @@ class RobotConnectionRequest(BaseModel):
 class RobotMoveRequest(BaseModel):
     direction: str
     distance: float = 0.05
+    speed_percent: float = 100.0
+    base_speed: float = 0.1
 
 class ThermalTrackingRequest(BaseModel):
     enabled: bool
 
+class HomeRequest(BaseModel):
+    speed_percent: float = 100.0
+
 class HomeJointsRequest(BaseModel):
-    joints: list[float]  # Joint angles in degrees
+    joints: list[float]
+    speed_percent: float = 100.0  # Joint angles in degrees
+
+class FineMovementRequest(BaseModel):
+    direction: str
+    step_size_mm: float = 1.0
+    velocity: float = 0.1
+    acceleration: float = 0.1
+
+class StepSizeRequest(BaseModel):
+    step_size_mm: float
+
+class RotationRequest(BaseModel):
+    axis: str
+    angle_deg: float
+    angular_velocity: float = 0.1
+    speed_percent: float = 100.0
+
+class TCPRequest(BaseModel):
+    tcp_offset: list[float]
+    tcp_id: int
+    tcp_name: str
 
 # Allow all origins for local setup (laptop-only deployment)
 app.add_middleware(
@@ -573,21 +599,30 @@ async def disconnect_robot():
     return result
 
 @app.post("/api/robot/home")
-async def move_robot_home():
+async def move_robot_home(request: HomeRequest):
     """Move robot to home position."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
-    result = robot_controller.move_to_home()
+    result = robot_controller.move_to_home(request.speed_percent)
     return result
 
 @app.post("/api/robot/move")
 async def move_robot_manual(request: RobotMoveRequest):
-    """Manual robot movement in specified direction."""
+    """Manual robot movement in specified direction using speedl tool coordinates."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
-    result = robot_controller.move_manual(request.direction, request.distance)
+    result = robot_controller.move_manual(request.direction, request.distance, request.speed_percent, request.base_speed)
+    return result
+
+@app.post("/api/robot/stop")
+async def stop_robot_movement():
+    """Stop all robot movement."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.stop_movement()
     return result
 
 @app.post("/api/robot/thermal-tracking")
@@ -624,7 +659,7 @@ async def move_robot_home_joints(request: HomeJointsRequest):
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
-    result = robot_controller.move_to_joint_angles(request.joints)
+    result = robot_controller.move_to_joint_angles(request.joints, request.speed_percent)
     return result
 
 @app.post("/api/robot/config/home-joints")
@@ -634,4 +669,49 @@ async def update_home_joints_config(request: HomeJointsRequest):
         return {"success": False, "error": "Robot controller not available"}
     
     result = robot_controller.update_home_joints_config(request.joints)
+    return result
+
+@app.post("/api/robot/move-fine")
+async def move_robot_fine(request: FineMovementRequest):
+    """Fine robot movement in TCP coordinates (precise positioning)."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.move_fine(request.direction, request.step_size_mm, request.velocity, request.acceleration)
+    return result
+
+@app.post("/api/robot/config/step-size")
+async def set_fine_step_size(request: StepSizeRequest):
+    """Set the fine movement step size."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.set_fine_step_size(request.step_size_mm)
+    return result
+
+@app.post("/api/robot/move-rotation")
+async def move_robot_rotation(request: RotationRequest):
+    """Fine robot rotation in TCP coordinates (Rx, Ry, Rz)."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.move_rotation(request.axis, request.angle_deg, request.angular_velocity, request.speed_percent)
+    return result
+
+@app.post("/api/robot/set-tcp")
+async def set_robot_tcp(request: TCPRequest):
+    """Set the TCP (Tool Center Point) offset for the robot."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.set_tcp_offset(request.tcp_offset, request.tcp_id, request.tcp_name)
+    return result
+
+@app.get("/api/robot/get-tcp")
+async def get_robot_tcp():
+    """Get the current TCP offset."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.get_current_tcp()
     return result 

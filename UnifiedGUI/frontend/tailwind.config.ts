@@ -26,6 +26,11 @@ const config: Config = {
   			'text-tertiary': '#6C7293',
   			'border-primary': '#333342',
   			'border-glow': '#FFA200',
+  			// Beachside palette
+  			'beachside-dark': '#3B7097',
+  			'beachside-medium': '#75BDE0', 
+  			'beachside-light': '#A9D09E',
+  			'beachside-sand': '#F6E2BC',
   			foreground: 'hsl(var(--foreground))',
   			card: {
   				DEFAULT: 'hsl(var(--card))',

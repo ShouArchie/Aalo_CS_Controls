@@ -12,15 +12,37 @@ body {
     linear-gradient(180deg, rgba(10, 10, 11, 1) 0%, rgba(21, 21, 24, 1) 100%);
 }
 
+/* Beachside theme body */
+body.beachside {
+  @apply text-gray-800 font-mono;
+  background: 
+    radial-gradient(circle at 25px 25px, rgba(255,255,255,0.3) 2px, transparent 2px),
+    radial-gradient(circle at 75px 75px, rgba(255,255,255,0.3) 2px, transparent 2px),
+    linear-gradient(135deg, #3B7097 0%, #75BDE0 30%, #A9D09E 70%, #F6E2BC 100%);
+  background-size: 50px 50px, 50px 50px, 100% 100%;
+  background-position: 0 0, 25px 25px, 0 0;
+}
+
 /* Tactical UI Components */
 .tactical-panel {
   @apply bg-surface-dark border border-border-primary shadow-tactical backdrop-blur-sm;
+}
+
+.beachside .tactical-panel {
+  @apply bg-white/20 border-beachside-dark/40 backdrop-blur-md;
+  box-shadow: 0 4px 16px rgba(59, 112, 151, 0.2);
 }
 
 .tactical-button {
   @apply bg-surface-medium border border-border-primary text-text-primary 
          hover:border-accent hover:shadow-glow transition-all duration-300
          font-mono text-sm uppercase tracking-wider;
+}
+
+.beachside .tactical-button {
+  @apply bg-beachside-medium/30 border-beachside-dark text-gray-800
+         hover:bg-beachside-light/50 hover:border-beachside-sand 
+         backdrop-blur-sm;
 }
 
 .tactical-input {
