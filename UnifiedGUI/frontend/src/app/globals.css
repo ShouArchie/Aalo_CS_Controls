@@ -1,7 +1,239 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-  @apply bg-background text-gray-200;
+  @apply bg-background text-text-primary font-mono;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(255, 162, 0, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 217, 255, 0.03) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(10, 10, 11, 1) 0%, rgba(21, 21, 24, 1) 100%);
+}
+
+/* Tactical UI Components */
+.tactical-panel {
+  @apply bg-surface-dark border border-border-primary shadow-tactical backdrop-blur-sm;
+}
+
+.tactical-button {
+  @apply bg-surface-medium border border-border-primary text-text-primary 
+         hover:border-accent hover:shadow-glow transition-all duration-300
+         font-mono text-sm uppercase tracking-wider;
+}
+
+.tactical-input {
+  @apply bg-surface-dark border border-border-primary text-text-primary
+         focus:border-accent focus:shadow-glow outline-none
+         font-mono placeholder-text-tertiary;
+}
+
+.status-indicator {
+  @apply w-2 h-2 rounded-full animate-pulse-glow;
+}
+
+.geometric-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* HUD Grid Overlay */
+.hud-grid {
+  background-image: 
+    linear-gradient(rgba(255, 162, 0, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 162, 0, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Scanning Line Effect */
+.scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #FFA200, transparent);
+  animation: scan-line 3s linear infinite;
+}
+
+/* Corner Brackets */
+.corner-brackets::before,
+.corner-brackets::after {
+  content: '';
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border: 2px solid #FFA200;
+}
+
+.corner-brackets::before {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.corner-brackets::after {
+  bottom: -2px;
+  right: -2px;
+  border-left: none;
+  border-top: none;
+}
+
+
+
+@layer base {
+  :root {
+    --background: 
+    0 0% 100%;
+    --foreground: 
+    0 0% 3.9%;
+    --card: 
+    0 0% 100%;
+    --card-foreground: 
+    0 0% 3.9%;
+    --popover: 
+    0 0% 100%;
+    --popover-foreground: 
+    0 0% 3.9%;
+    --primary: 
+    39 100% 50%;
+    --primary-foreground: 
+    0 0% 98%;
+    --secondary: 
+    240 4% 95%;
+    --secondary-foreground: 
+    240 6% 10%;
+    --muted: 
+    240 4% 95%;
+    --muted-foreground: 
+    240 3% 45%;
+    --accent: 
+    39 100% 50%;
+    --accent-foreground: 
+    0 0% 9%;
+    --destructive: 
+    0 84.2% 60.2%;
+    --destructive-foreground: 
+    0 0% 98%;
+    --border: 
+    240 6% 89%;
+    --input: 
+    240 6% 89%;
+    --ring: 
+    39 100% 50%;
+    --chart-1: 
+    12 76% 61%;
+    --chart-2: 
+    173 58% 39%;
+    --chart-3: 
+    197 37% 24%;
+    --chart-4: 
+    43 74% 66%;
+    --chart-5: 
+    27 87% 67%;
+    --radius: 
+    0.5rem;
+  }
+  .dark {
+    --background: 
+    240 6% 7%;
+    --foreground: 
+    0 0% 98%;
+    --card: 
+    240 4% 8%;
+    --card-foreground: 
+    0 0% 98%;
+    --popover: 
+    240 4% 8%;
+    --popover-foreground: 
+    0 0% 98%;
+    --primary: 
+    39 100% 50%;
+    --primary-foreground: 
+    0 0% 9%;
+    --secondary: 
+    240 4% 12%;
+    --secondary-foreground: 
+    0 0% 98%;
+    --muted: 
+    240 4% 12%;
+    --muted-foreground: 
+    240 5% 64%;
+    --accent: 
+    39 100% 50%;
+    --accent-foreground: 
+    0 0% 9%;
+    --destructive: 
+    0 62.8% 30.6%;
+    --destructive-foreground: 
+    0 0% 98%;
+    --border: 
+    240 6% 20%;
+    --input: 
+    240 6% 20%;
+    --ring: 
+    39 100% 50%;
+    --chart-1: 
+    39 100% 50%;
+    --chart-2: 
+    192 100% 50%;
+    --chart-3: 
+    19 91% 55%;
+    --chart-4: 
+    280 65% 60%;
+    --chart-5: 
+    340 75% 55%;
+  }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Enhanced Slider Styling */
+.slider-enhanced [data-radix-slider-track] {
+  background: linear-gradient(90deg, #333342 0%, #202028 100%) !important;
+  border: 1px solid #FFA200 !important;
+  box-shadow: 0 0 8px rgba(255, 162, 0, 0.3) !important;
+  height: 8px !important;
+}
+
+.slider-enhanced [data-radix-slider-range] {
+  background: linear-gradient(90deg, #FFA200 0%, #FFB84D 100%) !important;
+  box-shadow: 0 0 12px rgba(255, 162, 0, 0.6) !important;
+}
+
+.slider-enhanced [data-radix-slider-thumb] {
+  background: linear-gradient(145deg, #FFA200, #FFB84D) !important;
+  border: 2px solid #FFFFFF !important;
+  box-shadow: 
+    0 0 15px rgba(255, 162, 0, 0.8),
+    0 4px 8px rgba(0, 0, 0, 0.4) !important;
+  width: 18px !important;
+  height: 18px !important;
+  transition: all 0.2s ease !important;
+}
+
+.slider-enhanced [data-radix-slider-thumb]:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 
+    0 0 20px rgba(255, 162, 0, 1),
+    0 6px 12px rgba(0, 0, 0, 0.6) !important;
+}
+
+.slider-enhanced [data-radix-slider-thumb]:focus {
+  outline: none !important;
+  box-shadow: 
+    0 0 25px rgba(255, 162, 0, 1),
+    0 0 0 3px rgba(255, 162, 0, 0.3) !important;
 } 

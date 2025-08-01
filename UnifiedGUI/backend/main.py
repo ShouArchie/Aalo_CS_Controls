@@ -5,6 +5,7 @@ import cv2
 import asyncio
 import threading
 import time
+import queue
 from pathlib import Path
 import sys
 
@@ -58,48 +59,126 @@ app.add_middleware(
 # Generic OpenCV camera stream (used for RGB webcam)
 # ------------------------------------------------------------------
 class CameraStream:
-    """Continuously capture frames from a camera and store the latest JPEG buffer."""
+    """High-performance camera stream with optimized threading and minimal latency."""
 
-    def __init__(self, index: int, target_fps: int = 30):
+    def __init__(self, index: int, target_fps: int = 30, priority: str = "normal"):
         self.index = index
         self.target_fps = target_fps
+        self.priority = priority  # "high", "normal", "low"
+        
+        # Initialize camera with optimal settings
         self.cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
         if not self.cap.isOpened():
             raise RuntimeError(f"Could not open camera at index {index}")
 
-        # Optimize for low latency
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer lag
+        # Aggressive optimization for lowest latency
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Single frame buffer
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         self.cap.set(cv2.CAP_PROP_FPS, target_fps)
-
+        
+        # Set resolution for better performance
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        
+        # Threading
         self.running = False
         self.frame_bytes: bytes | None = None
-        self.thread: threading.Thread | None = None
+        self.capture_thread: threading.Thread | None = None
+        self.encode_thread: threading.Thread | None = None
+        
+        # Frame queue for decoupling capture and encoding
+        self.frame_queue = queue.Queue(maxsize=2)  # Small queue to reduce latency
+        self.last_frame_time = 0
+        
+        # JPEG encoding settings
+        self.jpeg_quality = 85 if priority == "high" else 75
+        self.jpeg_params = [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality]
 
     def start(self):
         if self.running:
             return
         self.running = True
-        self.thread = threading.Thread(target=self._loop, daemon=True)
-        self.thread.start()
+        
+        # Separate threads for capture and encoding for better performance
+        self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.encode_thread = threading.Thread(target=self._encode_loop, daemon=True)
+        
+        # Set thread priority based on camera importance
+        if self.priority == "high":
+            try:
+                import os
+                if hasattr(os, 'sched_setparam'):
+                    # Linux/Unix thread priority
+                    param = os.sched_param(os.sched_get_priority_max(os.SCHED_FIFO))
+                    os.sched_setparam(0, param)
+            except:
+                pass  # Platform doesn't support priority setting
+        
+        self.capture_thread.start()
+        self.encode_thread.start()
 
-    def _loop(self):
+    def _capture_loop(self):
+        """High-priority capture loop - minimal processing."""
+        target_interval = 1.0 / self.target_fps
         while self.running:
+            start_time = time.time()
+            
             ret, frame = self.cap.read()
             if ret:
-                success, jpg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                # Non-blocking queue put - drop frames if encoding can't keep up
+                try:
+                    self.frame_queue.put_nowait(frame)
+                except queue.Full:
+                    # Drop oldest frame and add new one
+                    try:
+                        self.frame_queue.get_nowait()
+                        self.frame_queue.put_nowait(frame)
+                    except queue.Empty:
+                        pass
+            
+            # Precise timing control
+            elapsed = time.time() - start_time
+            sleep_time = max(0, target_interval - elapsed)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+    def _encode_loop(self):
+        """Encoding loop - handles JPEG compression in separate thread."""
+        while self.running:
+            try:
+                # Get frame with timeout
+                frame = self.frame_queue.get(timeout=0.1)
+                
+                # Fast JPEG encoding
+                success, jpg = cv2.imencode(".jpg", frame, self.jpeg_params)
                 if success:
                     self.frame_bytes = jpg.tobytes()
-            else:
-                time.sleep(0.01)  # Brief pause if capture fails
+                    self.last_frame_time = time.time()
+                    
+            except queue.Empty:
+                time.sleep(0.01)  # Brief pause if no frames available
+            except Exception as e:
+                print(f"Encode error: {e}")
+                time.sleep(0.01)
 
     def latest(self) -> bytes | None:
         return self.frame_bytes
 
+    def get_fps(self) -> float:
+        """Calculate actual FPS."""
+        if self.last_frame_time == 0:
+            return 0
+        return 1.0 / max(0.001, time.time() - self.last_frame_time)
+
     def stop(self):
         self.running = False
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=2)
+        
+        # Join threads with timeout
+        for thread in [self.capture_thread, self.encode_thread]:
+            if thread and thread.is_alive():
+                thread.join(timeout=1)
+        
+        # Release camera
         if self.cap:
             self.cap.release()
 
@@ -113,13 +192,15 @@ class RawThermalStream(CameraStream):
     """Capture from a plain UVC thermal camera and apply false-color colormap."""
 
     def __init__(self, index: int = 2, target_fps: int = 25):
-        super().__init__(index=index, target_fps=target_fps)
+        super().__init__(index=index, target_fps=target_fps, priority="high")
 
-    def _loop(self):
-        delay = 1.0 / max(self.target_fps, 1)
+    def _encode_loop(self):
+        """Override encoding loop for thermal colormap processing."""
         while self.running:
-            ret, frame = self.cap.read()
-            if ret:
+            try:
+                # Get frame with timeout
+                frame = self.frame_queue.get(timeout=0.1)
+                
                 # Convert to grayscale (assume 8-bit or choose one channel)
                 if len(frame.shape) == 3 and frame.shape[2] == 3:
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -130,10 +211,16 @@ class RawThermalStream(CameraStream):
                 norm = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
                 color = cv2.applyColorMap(norm.astype('uint8'), cv2.COLORMAP_INFERNO)
 
-                ok, jpg = cv2.imencode('.jpg', color, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                ok, jpg = cv2.imencode('.jpg', color, self.jpeg_params)
                 if ok:
                     self.frame_bytes = jpg.tobytes()
-            time.sleep(delay)
+                    self.last_frame_time = time.time()
+                    
+            except queue.Empty:
+                time.sleep(0.01)
+            except Exception as e:
+                print(f"Thermal colormap error: {e}")
+                time.sleep(0.01)
 
 
 # ------------------------------------------------------------------
@@ -142,7 +229,7 @@ class RawThermalStream(CameraStream):
 
 
 class HT301Stream:
-    """Use ThermalCameraCapture from capture_thermal to acquire frames."""
+    """High-performance HT301 thermal camera stream with optimized threading."""
 
     def __init__(self, target_fps: int = 15):
         if ThermalCameraCapture is None:
@@ -153,7 +240,15 @@ class HT301Stream:
                                             temp_filter_enabled=False)
         self.running = False
         self.frame_bytes: bytes | None = None
-        self.thread: threading.Thread | None = None
+        self.capture_thread: threading.Thread | None = None
+        self.encode_thread: threading.Thread | None = None
+        
+        # Frame queue for decoupling capture and encoding
+        self.frame_queue = queue.Queue(maxsize=2)
+        self.last_frame_time = 0
+        
+        # High quality JPEG for thermal data
+        self.jpeg_params = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
 
     def start(self):
         if self.running:
@@ -162,28 +257,80 @@ class HT301Stream:
             raise RuntimeError("HT301 camera failed to start")
 
         self.running = True
-        self.thread = threading.Thread(target=self._loop, daemon=True)
-        self.thread.start()
+        
+        # Separate threads for better performance
+        self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.encode_thread = threading.Thread(target=self._encode_loop, daemon=True)
+        
+        self.capture_thread.start()
+        self.encode_thread.start()
 
-    def _loop(self):
-        delay = 1.0 / max(self.target_fps, 1)
+    def _capture_loop(self):
+        """High-priority thermal capture loop."""
+        target_interval = 1.0 / max(self.target_fps, 1)
         while self.running:
+            start_time = time.time()
+            
             frame = self.capture.get_latest_frame()
             if frame is not None:
+                # Non-blocking queue put
+                try:
+                    self.frame_queue.put_nowait(frame)
+                except queue.Full:
+                    # Drop oldest frame and add new one
+                    try:
+                        self.frame_queue.get_nowait()
+                        self.frame_queue.put_nowait(frame)
+                    except queue.Empty:
+                        pass
+            
+            # Precise timing control
+            elapsed = time.time() - start_time
+            sleep_time = max(0, target_interval - elapsed)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+    def _encode_loop(self):
+        """Encoding loop for thermal frames."""
+        while self.running:
+            try:
+                # Get frame with timeout
+                frame = self.frame_queue.get(timeout=0.1)
+                
                 # frame is RGB; convert to BGR for JPEG encoding
                 bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                ok, jpg = cv2.imencode('.jpg', bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                
+                # Rotate thermal camera view by 180 degrees
+                rotated = cv2.rotate(bgr, cv2.ROTATE_180)
+                
+                ok, jpg = cv2.imencode('.jpg', rotated, self.jpeg_params)
                 if ok:
                     self.frame_bytes = jpg.tobytes()
-            time.sleep(delay)
+                    self.last_frame_time = time.time()
+                    
+            except queue.Empty:
+                time.sleep(0.01)
+            except Exception as e:
+                print(f"Thermal encode error: {e}")
+                time.sleep(0.01)
 
     def latest(self) -> bytes | None:
         return self.frame_bytes
 
+    def get_fps(self) -> float:
+        """Calculate actual FPS."""
+        if self.last_frame_time == 0:
+            return 0
+        return 1.0 / max(0.001, time.time() - self.last_frame_time)
+
     def stop(self):
         self.running = False
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=2)
+        
+        # Join threads with timeout
+        for thread in [self.capture_thread, self.encode_thread]:
+            if thread and thread.is_alive():
+                thread.join(timeout=1)
+                
         if hasattr(self.capture, 'stop'):
             try:
                 self.capture.stop()
@@ -206,22 +353,41 @@ def _init_rgb() -> CameraStream | None:
     return None
 
 
-rgb_stream = CameraStream(index=1, target_fps=15)  # Lower FPS for less lag
-rgb_stream.start()
-print(f"✓ RGB camera started at index 1")
+# Initialize RGB camera with high priority for smooth video - try 60fps first
+try:
+    rgb_stream = CameraStream(index=1, target_fps=60, priority="high")
+    rgb_stream.start()
+    print(f"✓ RGB camera started at index 1 with 60 FPS high priority")
+except Exception as e:
+    print(f"60 FPS failed for RGB, trying 30 FPS fallback: {e}")
+    rgb_stream = CameraStream(index=1, target_fps=30, priority="high")
+    rgb_stream.start()
+    print(f"✓ RGB camera started at index 1 with 30 FPS fallback")
 
-# Thermal stream (HT301 preferred)
-
+# Thermal stream (HT301 preferred) with high priority - try 60fps first
 thermal_stream: HT301Stream | CameraStream
 
 try:
-    thermal_stream = HT301Stream(target_fps=15)
+    thermal_stream = HT301Stream(target_fps=60)  # Try 60 FPS for thermal
     thermal_stream.start()
-    print("✓ HT301 thermal camera started")
+    print("✓ HT301 thermal camera started with 60 FPS high priority")
 except Exception as e:
-    print(f"HT301 init error: {e}. Falling back to webcam index 2.")
-    thermal_stream = RawThermalStream(index=2, target_fps=25)
-    thermal_stream.start()
+    print(f"HT301 60 FPS failed, trying 30 FPS: {e}")
+    try:
+        thermal_stream = HT301Stream(target_fps=30)
+        thermal_stream.start()
+        print("✓ HT301 thermal camera started with 30 FPS fallback")
+    except Exception as e2:
+        print(f"HT301 init error: {e2}. Falling back to webcam index 2.")
+        thermal_stream = RawThermalStream(index=2, target_fps=60)
+        try:
+            thermal_stream.start()
+            print("✓ Fallback thermal camera started with 60 FPS")
+        except Exception as e3:
+            print(f"60 FPS fallback failed, using 30 FPS: {e3}")
+            thermal_stream = RawThermalStream(index=2, target_fps=30)
+            thermal_stream.start()
+            print("✓ Fallback thermal camera started with 30 FPS")
 
 # Start streams ensured above; collect running list for shutdown
 running_streams = [s for s in (rgb_stream, thermal_stream) if s]
@@ -232,17 +398,37 @@ async def root():
     return {"status": "ok"}
 
 
-async def _frame_sender(websocket: WebSocket, stream: CameraStream):
-    """Send frames at ~100 Hz (10 ms sleep) or as fast as they arrive."""
+async def _frame_sender(websocket: WebSocket, stream: CameraStream | HT301Stream):
+    """High-performance frame sender optimized for minimal latency."""
     await websocket.accept()
     try:
+        last_frame = None
+        frame_count = 0
+        start_time = time.time()
+        
         while True:
             frame = stream.latest()
-            if frame:
-                # Send raw JPEG bytes
+            if frame and frame != last_frame:
+                # Only send new frames to reduce bandwidth
                 await websocket.send_bytes(frame)
-            await asyncio.sleep(0.01)  # 100 Hz
+                last_frame = frame
+                frame_count += 1
+                
+                # Log performance every 100 frames
+                if frame_count % 100 == 0:
+                    elapsed = time.time() - start_time
+                    actual_fps = frame_count / elapsed
+                    print(f"WebSocket FPS: {actual_fps:.1f}")
+                    frame_count = 0
+                    start_time = time.time()
+            
+            # Minimal sleep for high-frequency updates
+            await asyncio.sleep(0.005)  # 200 Hz check rate
     except WebSocketDisconnect:
+        print("WebSocket client disconnected")
+        return
+    except Exception as e:
+        print(f"WebSocket error: {e}")
         return
 
 

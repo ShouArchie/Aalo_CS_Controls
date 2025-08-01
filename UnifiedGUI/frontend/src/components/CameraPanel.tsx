@@ -69,43 +69,99 @@ export default function CameraPanel({
   }, [isThermal]);
 
   return (
-    <div className="flex flex-col gap-2">
-      <h2 className="text-lg font-semibold text-accent drop-shadow-glow">{title}</h2>
-      <div className="relative">
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`status-indicator ${isThermal ? 'bg-warning' : 'bg-success'}`}></div>
+          <h2 className="text-sm font-tactical font-bold text-accent uppercase tracking-wider">
+            {title}
+          </h2>
+        </div>
+        <div className="text-xs font-mono text-text-secondary">
+          {fps} FPS
+        </div>
+      </div>
+
+      {/* Camera Display */}
+      <div className="relative bg-surface-dark rounded overflow-hidden">
         <canvas 
           ref={canvasRef} 
-          className={`border border-gray-700 rounded w-full h-auto ${isThermal ? 'cursor-crosshair' : ''}`}
+          className={`w-full ${isThermal ? 'cursor-crosshair' : ''} block`}
           onClick={handleCanvasClick}
-          style={{ aspectRatio: '4/3' }}
+          style={{ aspectRatio: '4/3', height: 'calc((100vh - 160px) / 2.2)', objectFit: 'contain' }}
         />
+        
+        {/* Tactical Overlay Grid */}
+        <div className="absolute inset-0 pointer-events-none">
+          <svg className="w-full h-full opacity-20" viewBox="0 0 400 300">
+            {/* Corner markers */}
+            <g stroke="#FFA200" strokeWidth="1" fill="none">
+              <path d="M10,10 L30,10 M10,10 L10,30" />
+              <path d="M370,10 L390,10 M390,10 L390,30" />
+              <path d="M10,270 L30,270 M10,270 L10,290" />
+              <path d="M370,270 L390,270 M390,270 L390,290" />
+            </g>
+            
+            {/* Center crosshair */}
+            <g stroke="#FFA200" strokeWidth="1" opacity="0.4">
+              <line x1="190" y1="140" x2="210" y2="140" />
+              <line x1="200" y1="130" x2="200" y2="170" />
+              <circle cx="200" cy="150" r="20" fill="none" />
+            </g>
+            
+            {/* Grid lines */}
+            <g stroke="#FFA200" strokeWidth="0.5" opacity="0.2">
+              <line x1="133" y1="0" x2="133" y2="300" />
+              <line x1="267" y1="0" x2="267" y2="300" />
+              <line x1="0" y1="100" x2="400" y2="100" />
+              <line x1="0" y1="200" x2="400" y2="200" />
+            </g>
+          </svg>
+        </div>
+
+        {/* Temperature Data Overlay */}
         {isThermal && (
-          <div className="absolute top-2 left-2 bg-black bg-opacity-70 text-white text-xs p-2 rounded space-y-1">
+          <div className="absolute top-3 left-3 bg-white bg-opacity-90 border border-gray-300 rounded p-2 space-y-1 text-xs font-mono backdrop-blur-sm">
             {tempData.min_temp !== undefined && (
-              <div>Min: {tempData.min_temp}°C | Max: {tempData.max_temp}°C</div>
+              <div className="text-black">
+                <span className="text-blue-600 font-bold">MIN:</span> {tempData.min_temp}°C | 
+                <span className="text-red-600 font-bold ml-1">MAX:</span> {tempData.max_temp}°C
+              </div>
             )}
             {tempData.temperature && (
-              <div>Point ({tempData.x}, {tempData.y}): {tempData.temperature}°C</div>
+              <div className="text-black font-bold">
+                POINT [{tempData.x},{tempData.y}]: {tempData.temperature}°C
+              </div>
             )}
           </div>
         )}
+
+        {/* Status Indicators */}
+        <div className="absolute bottom-3 right-3 flex gap-2">
+          {isThermal && (
+            <>
+              <div className={`px-2 py-1 rounded text-xs font-mono ${
+                filterEnabled 
+                  ? 'bg-success bg-opacity-20 text-success border border-success' 
+                  : 'bg-warning bg-opacity-20 text-warning border border-warning'
+              }`}>
+                {filterEnabled ? 'FILT' : 'RAW'}
+              </div>
+              <div className="px-2 py-1 rounded text-xs font-mono bg-accent bg-opacity-20 text-accent border border-accent">
+                {colorPalette}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-      
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-gray-400">FPS: {fps}</span>
-        {isThermal && (
-          <div className="flex gap-4 text-xs">
-            <span className={`font-medium ${filterEnabled ? 'text-green-400' : 'text-orange-400'}`}>
-              Filter: {filterEnabled ? 'ON' : 'OFF'}
-            </span>
-            {filterEnabled && (
-              <span className="text-gray-400">
-                {tempRange.min}°C - {tempRange.max}°C
-              </span>
-            )}
-            <span className="text-accent">{colorPalette}</span>
-          </div>
-        )}
-      </div>
+
+      {/* Technical Readout */}
+      {isThermal && filterEnabled && (
+        <div className="text-xs font-mono text-text-secondary">
+          FILTER RANGE: {tempRange.min}°C → {tempRange.max}°C
+        </div>
+      )}
     </div>
   );
 } 
