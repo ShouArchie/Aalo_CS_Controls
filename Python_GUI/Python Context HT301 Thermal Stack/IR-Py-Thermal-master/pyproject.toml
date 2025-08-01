@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "ir-py-thermal"
+version = "0.1.0"
+description = "ir-py-thermal"
+authors = ["Dima <me@dmytroengineering.com>"]
+repository = "https://github.com/diminDDL/IR-Py-Thermal"
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10.4"
+opencv-python = "^4.10.0.84"
+matplotlib = "^3.9.2"
+pyserial = "^3.5"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.7.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ISC001",
+    "COM812", # trailing comma missing
+    "D203", # one-blank-line-before-class
+    "D212", # multi-line-summary-first-line
+    "T201", # print-found
+    "TD002", # issue author missing
+    "TD003", # issue link missing
+    ]

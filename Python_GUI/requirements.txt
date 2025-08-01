@@ -1,0 +1,13 @@
+# GUI v8 Requirements - Dual Camera System
+# Python 3.7+ required
+
+# Core GUI framework
+PyQt5>=5.15.0
+
+# Computer vision and image processing
+opencv-python>=4.5.0
+numpy>=1.20.0
+
+# HT301 Thermal Camera
+# Note: HT301 thermal camera library (irpythermal) is included locally
+# in "Python Context HT301 Thermal Stack/IR-Py-Thermal-master/" 
