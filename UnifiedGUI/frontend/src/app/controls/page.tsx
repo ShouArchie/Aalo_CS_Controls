@@ -5,7 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function ControlsPage() {
@@ -49,6 +49,12 @@ export default function ControlsPage() {
   });
 
   const [toolAligning, setToolAligning] = useState(false);
+
+  // Responsive keystroke detection for WASD
+  const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+  const [activeSpeedLKeys, setActiveSpeedLKeys] = useState<Set<string>>(new Set());
+  
+
 
   // Conical spray paths configuration
   const [conicalSprayPaths, setConicalSprayPaths] = useState("");
@@ -120,6 +126,123 @@ export default function ControlsPage() {
     router.push(path);
   };
 
+  // Handle speedL movement (WASD/QE) - start/stop continuous movement
+  useEffect(() => {
+    const speedLKeys = ['w', 's', 'a', 'd', 'q', 'e'];
+    const currentSpeedLKeys = new Set([...pressedKeys].filter(key => speedLKeys.includes(key)));
+    
+    // Convert sets to sorted arrays for comparison
+    const currentArray = [...currentSpeedLKeys].sort();
+    const activeArray = [...activeSpeedLKeys].sort();
+    
+    // Check if speedL keys actually changed
+    const keysChanged = currentArray.length !== activeArray.length || 
+                       !currentArray.every((key, index) => key === activeArray[index]);
+    
+    if (keysChanged) {
+      if (currentSpeedLKeys.size === 0) {
+        // No speedL keys pressed, stop movement
+        if (activeSpeedLKeys.size > 0) {
+          stopRobot();
+        }
+      } else if (robotConnected) {
+        // Start speedL movement for the primary key (prioritize first pressed)
+        const primaryKey = [...currentSpeedLKeys][0];
+        switch (primaryKey) {
+          case 'w':
+            moveRobot('z+', 0.5); // Use larger distance for speedL
+            break;
+          case 's':
+            moveRobot('z-', 0.5);
+            break;
+          case 'a':
+            moveRobot('y-', 0.5);
+            break;
+          case 'd':
+            moveRobot('y+', 0.5);
+            break;
+          case 'q':
+            moveRobot('x+', 0.5);
+            break;
+          case 'e':
+            moveRobot('x-', 0.5);
+            break;
+        }
+      }
+      
+      setActiveSpeedLKeys(currentSpeedLKeys);
+    }
+  }, [pressedKeys, robotConnected]); // Removed activeSpeedLKeys from dependencies
+
+  // Handle discrete fine movements (IJKL, UO, RFGTYH) - using ref to avoid infinite loops
+  const processedKeysRef = useRef<Set<string>>(new Set());
+  
+  useEffect(() => {
+    const fineMovementKeys = ['i', 'k', 'j', 'l', 'u', 'o', 'r', 'f', 't', 'g', 'y', 'h'];
+    const newFineKeys = [...pressedKeys].filter(key => 
+      fineMovementKeys.includes(key) && !processedKeysRef.current.has(key)
+    );
+    
+    if (newFineKeys.length > 0 && robotConnected) {
+      newFineKeys.forEach(key => {
+        switch (key) {
+          case 'i':
+            moveFine('z+', fineStepSize);
+            break;
+          case 'k':
+            moveFine('z-', fineStepSize);
+            break;
+          case 'j':
+            moveFine('y-', fineStepSize);
+            break;
+          case 'l':
+            moveFine('y+', fineStepSize);
+            break;
+          case 'u':
+            moveFine('x+', fineStepSize);
+            break;
+          case 'o':
+            moveFine('x-', fineStepSize);
+            break;
+          case 'r':
+            moveRotation('rx+', rotationAngle);
+            break;
+          case 'f':
+            moveRotation('rx-', rotationAngle);
+            break;
+          case 't':
+            moveRotation('ry+', rotationAngle);
+            break;
+          case 'g':
+            moveRotation('ry-', rotationAngle);
+            break;
+          case 'y':
+            moveRotation('rz+', rotationAngle);
+            break;
+          case 'h':
+            moveRotation('rz-', rotationAngle);
+            break;
+        }
+        // Mark this key as processed
+        processedKeysRef.current.add(key);
+      });
+    }
+    
+    // Remove released keys from processed set
+    const currentFineKeys = [...pressedKeys].filter(key => fineMovementKeys.includes(key));
+    processedKeysRef.current = new Set([...processedKeysRef.current].filter(key => currentFineKeys.includes(key)));
+    
+  }, [pressedKeys, robotConnected, fineStepSize, rotationAngle]);
+
+  // Clear pressed keys when robot disconnects
+  useEffect(() => {
+    if (!robotConnected) {
+      setPressedKeys(new Set());
+      setActiveSpeedLKeys(new Set());
+      processedKeysRef.current = new Set();
+    }
+  }, [robotConnected]);
+
   // Keyboard shortcuts for robot controls
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -128,101 +251,30 @@ export default function ControlsPage() {
         setShowSettings(true);
       }
       // WASD robot movement (only when robot is connected and not typing in input)
-      else if (robotConnected && document.activeElement?.tagName !== 'INPUT') {
-        switch (event.key.toLowerCase()) {
-          case 'w':
-            event.preventDefault();
-            moveRobot('z+');
-            break;
-          case 's':
-            event.preventDefault();
-            moveRobot('z-');
-            break;
-          case 'a':
-            event.preventDefault();
-            moveRobot('y-');
-            break;
-          case 'd':
-            event.preventDefault();
-            moveRobot('y+');
-            break;
-          case 'q':
-            event.preventDefault();
-            moveRobot('x+');
-            break;
-          case 'e':
-            event.preventDefault();
-            moveRobot('x-');
-            break;
-          // IJKL for fine movements (use UI step size)
-          case 'i':
-            event.preventDefault();
-            moveFine('z+', fineStepSize);
-            break;
-          case 'k':
-            event.preventDefault();
-            moveFine('z-', fineStepSize);
-            break;
-          case 'j':
-            event.preventDefault();
-            moveFine('y-', fineStepSize);
-            break;
-          case 'l':
-            event.preventDefault();
-            moveFine('y+', fineStepSize);
-            break;
-          case 'u':
-            event.preventDefault();
-            moveFine('x+', fineStepSize);
-            break;
-          case 'o':
-            event.preventDefault();
-            moveFine('x-', fineStepSize);
-            break;
-          // R/F for Rx rotation (fine movements)
-          case 'r':
-            event.preventDefault();
-            moveRotation('rx+', rotationAngle);
-            break;
-          case 'f':
-            event.preventDefault();
-            moveRotation('rx-', rotationAngle);
-            break;
-          // T/G for Ry rotation (fine movements)
-          case 't':
-            event.preventDefault();
-            moveRotation('ry+', rotationAngle);
-            break;
-          case 'g':
-            event.preventDefault();
-            moveRotation('ry-', rotationAngle);
-            break;
-          // Y/H for Rz rotation (fine movements)
-          case 'y':
-            event.preventDefault();
-            moveRotation('rz+', rotationAngle);
-            break;
-          case 'h':
-            event.preventDefault();
-            moveRotation('rz-', rotationAngle);
-            break;
+      else if (robotConnected && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        const key = event.key.toLowerCase();
+        const movementKeys = ['w', 's', 'a', 'd', 'q', 'e', 'i', 'k', 'j', 'l', 'u', 'o', 'r', 'f', 't', 'g', 'y', 'h'];
+        
+        if (movementKeys.includes(key) && !event.repeat) {
+          event.preventDefault();
+          setPressedKeys(prev => new Set(prev).add(key));
         }
       }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      // Stop robot movement on key release for WASD
-      if (robotConnected && document.activeElement?.tagName !== 'INPUT') {
-        switch (event.key.toLowerCase()) {
-          case 'w':
-          case 's':
-          case 'a':
-          case 'd':
-          case 'q':
-          case 'e':
-            event.preventDefault();
-            stopRobot();
-            break;
+      // Remove key from pressed keys set
+      if (robotConnected && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        const key = event.key.toLowerCase();
+        const movementKeys = ['w', 's', 'a', 'd', 'q', 'e', 'i', 'k', 'j', 'l', 'u', 'o', 'r', 'f', 't', 'g', 'y', 'h'];
+        
+        if (movementKeys.includes(key)) {
+          event.preventDefault();
+          setPressedKeys(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(key);
+            return newSet;
+          });
         }
       }
     };
@@ -530,6 +582,8 @@ export default function ControlsPage() {
     }
   };
 
+
+
   const executeConicalSprayPaths = async () => {
     try {
       if (!robotConnected) {
@@ -767,6 +821,42 @@ export default function ControlsPage() {
                 <div className="space-y-3">
                   <h4 className="text-sm text-accent font-tactical">Continuous Movement (Base Coordinates)</h4>
                   
+                  {/* Keyboard Controls Info */}
+                  <div className="text-xs text-text-secondary bg-surface-dark/30 p-2 rounded">
+                    <span className="text-accent font-bold">⌨️ Responsive Keys:</span><br/>
+                    <span className="text-blue-400">• SpeedL (Continuous):</span> WASD (XYZ), QE (±X)<br/>
+                    <span className="text-green-400">• Fine (Discrete):</span> IJKL (XYZ), UO (±X), RFGTYH (Rotations)
+                  </div>
+                  
+                  {/* Active Keys Indicator */}
+                  {pressedKeys.size > 0 && (
+                    <div className="bg-accent/10 border border-accent/20 rounded p-2">
+                      <div className="text-xs text-text-secondary mb-1">Active Keys:</div>
+                      <div className="flex gap-1 flex-wrap">
+                        {Array.from(pressedKeys).map(key => {
+                          const isSpeedL = ['w', 's', 'a', 'd', 'q', 'e'].includes(key);
+                          const isFine = ['i', 'k', 'j', 'l', 'u', 'o', 'r', 'f', 't', 'g', 'y', 'h'].includes(key);
+                          return (
+                            <span 
+                              key={key} 
+                              className={`px-2 py-1 rounded text-xs font-mono font-bold ${
+                                isSpeedL 
+                                  ? 'bg-blue-500/20 text-blue-400 animate-pulse' 
+                                  : isFine 
+                                    ? 'bg-green-500/20 text-green-400' 
+                                    : 'bg-accent/20 text-accent'
+                              }`}
+                            >
+                              {key.toUpperCase()}
+                              {isSpeedL && ' (SpeedL)'}
+                              {isFine && ' (Fine)'}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Large Movement Buttons */}
                   <div className="grid grid-cols-3 gap-3">
                     <button 
@@ -833,6 +923,8 @@ export default function ControlsPage() {
                       <span className="text-xs leading-tight">E-STOP</span>
                     </button>
                   </div>
+
+
 
                   {/* Keyboard Hints */}
                   <div className="text-xs text-text-secondary bg-surface-dark/50 p-2 rounded">
@@ -1056,6 +1148,8 @@ export default function ControlsPage() {
                     <div>IJKL/UO: Translation ({fineStepSize}mm)</div>
                     <div>RF/TG/YH: Rotation Rx/Ry/Rz ({rotationAngle}°)</div>
                   </div>
+                  
+
                 </div>
               </>
             )}

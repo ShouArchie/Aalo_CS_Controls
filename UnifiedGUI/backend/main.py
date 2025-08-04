@@ -87,6 +87,8 @@ class RotationRequest(BaseModel):
     angular_velocity: float = 0.1
     speed_percent: float = 100.0
 
+
+
 class TCPRequest(BaseModel):
     tcp_offset: list[float]
     tcp_id: int
@@ -706,6 +708,8 @@ async def move_robot_rotation(request: RotationRequest):
     
     result = robot_controller.move_rotation(request.axis, request.angle_deg, request.angular_velocity, request.speed_percent)
     return result
+
+
 
 @app.post("/api/robot/set-tcp")
 async def set_robot_tcp(request: TCPRequest):

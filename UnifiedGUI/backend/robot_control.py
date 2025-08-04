@@ -443,6 +443,7 @@ class UnifiedRobotController:
             print(f"❌ Rotation error: {e}")
             return {"success": False, "error": str(e)}
     
+
     def set_tcp_offset(self, tcp_offset: list[float], tcp_id: int, tcp_name: str) -> dict:
         """Set the TCP (Tool Center Point) offset for the robot"""
         try:
