@@ -50,6 +50,9 @@ export default function ControlsPage() {
 
   const [toolAligning, setToolAligning] = useState(false);
 
+  // Conical spray paths configuration
+  const [conicalSprayPaths, setConicalSprayPaths] = useState("");
+
   // Validation for cold spray parameters
   const isValidSprayParams = () => {
     const acc = parseFloat(coldSprayParams.acceleration);
@@ -61,6 +64,26 @@ export default function ControlsPage() {
            !isNaN(vel) && vel > 0 &&
            !isNaN(blend) && blend >= 0 &&
            !isNaN(iter) && iter > 0;
+  };
+
+  // Validation for conical spray paths
+  const isValidConicalPaths = () => {
+    if (!conicalSprayPaths.trim()) return false;
+    
+    try {
+      const paths = JSON.parse(conicalSprayPaths);
+      if (!Array.isArray(paths) || paths.length === 0 || paths.length > 4) return false;
+      
+      return paths.every(path => 
+        typeof path === 'object' &&
+        'tilt' in path && 'rev' in path && 'cycle' in path &&
+        typeof path.tilt === 'number' && 
+        typeof path.rev === 'number' && 
+        typeof path.cycle === 'number'
+      );
+    } catch {
+      return false;
+    }
   };
 
   // TCP Presets
@@ -504,6 +527,40 @@ export default function ControlsPage() {
     } catch (error) {
       console.error('Failed to execute tool alignment:', error);
       setToolAligning(false);
+    }
+  };
+
+  const executeConicalSprayPaths = async () => {
+    try {
+      if (!robotConnected) {
+        console.error('Robot not connected');
+        return;
+      }
+
+      if (!isValidConicalPaths()) {
+        console.error('Invalid conical spray paths');
+        return;
+      }
+
+      console.log(`🌀 Executing conical spray paths:`, conicalSprayPaths);
+
+      const response = await fetch('http://localhost:8000/api/robot/conical-spray', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spray_paths: conicalSprayPaths
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ Conical spray paths executed:`, result.message);
+      } else {
+        const error = await response.json();
+        console.error('Failed to execute conical spray paths:', error.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Failed to execute conical spray paths:', error);
     }
   };
 
@@ -1177,7 +1234,6 @@ export default function ControlsPage() {
                 <div>• Rotation increment: 1.36° per step</div>
                 <div>• Pattern structure: 5 forward + 5 reverse cycles per iteration</div>
                 <div>• Total iterations: {coldSprayParams.iterations || '0'} cycles</div>
-                <div>• Estimated duration: ~{Math.round((parseInt(coldSprayParams.iterations) || 1) * 60 / (parseFloat(coldSprayParams.velocity) || 0.1))}s</div>
               </div>
             </>
           )}
@@ -1188,6 +1244,92 @@ export default function ControlsPage() {
                 <div className="text-4xl mb-4">🧊</div>
                 <div className="text-lg">Robot Not Connected</div>
                 <div className="text-sm">Connect robot to use cold spray pattern</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Conical Spray Paths Controls */}
+        <div className="mt-3 bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="status-indicator bg-warning"></div>
+            <h3 className="text-lg font-tactical text-accent font-medium">Conical Spray Paths</h3>
+          </div>
+
+          {robotConnected && (
+            <>
+              {/* Input Field */}
+              <div className="space-y-2">
+                <label className="text-sm text-text-secondary">
+                  Spray Path Configuration (1-4 paths)
+                </label>
+                <textarea
+                  value={conicalSprayPaths}
+                  onChange={(e) => setConicalSprayPaths(e.target.value)}
+                  placeholder='[{"tilt": 15, "rev": 4, "cycle": 0.0475}, {"tilt": 10, "rev": 4, "cycle": 0.0475}]'
+                  className="w-full h-24 text-sm bg-surface-dark border-accent/30 text-text-primary p-3 rounded font-mono"
+                />
+              </div>
+
+              {/* Example Buttons */}
+              <div className="space-y-2">
+                <label className="text-sm text-text-secondary">Quick Examples</label>
+                <div className="flex gap-2 flex-wrap">
+                  <button 
+                    onClick={() => setConicalSprayPaths('[{"tilt": 15, "rev": 2, "cycle": 0.015}]')}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Single Path
+                  </button>
+                  <button 
+                    onClick={() => setConicalSprayPaths('[{"tilt": 15, "rev": 4, "cycle": 0.0475}, {"tilt": 10, "rev": 4, "cycle": 0.0475}]')}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Dual Path
+                  </button>
+                  <button 
+                    onClick={() => setConicalSprayPaths('[{"tilt": 15, "rev": 2, "cycle": 0.015}, {"tilt": 10, "rev": 2, "cycle": 0.015}, {"tilt": 15, "rev": 2, "cycle": 0.0475}, {"tilt": 10, "rev": 2, "cycle": 0.0475}]')}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Quad Path
+                  </button>
+                </div>
+              </div>
+
+              {/* Execute Button */}
+              <div className="flex justify-center">
+                <button
+                  onClick={executeConicalSprayPaths}
+                  disabled={!isValidConicalPaths() || toolAligning}
+                  className={`tactical-button py-3 px-6 text-base font-bold rounded-lg ${
+                    !isValidConicalPaths() || toolAligning
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+                  }`}
+                >
+                  🌀 EXECUTE CONICAL SPRAY PATHS
+                </button>
+              </div>
+
+              {/* Info */}
+              <div className="text-xs text-text-secondary bg-surface-dark/50 p-3 rounded">
+                <div className="font-bold text-accent mb-2">Pattern Info:</div>
+                <div>• <span className="text-purple-400">Steps:</span> Always 180 × revolutions</div>
+                <div>• <span className="text-pink-400">Parameters:</span> tilt (degrees), rev (revolutions), cycle (seconds)</div>
+                <div>• <span className="text-blue-400">Paths:</span> {isValidConicalPaths() ? JSON.parse(conicalSprayPaths).length : 0}/4 configured</div>
+                {isValidConicalPaths() && (
+                  <div>• <span className="text-green-400">Total Steps:</span> {JSON.parse(conicalSprayPaths).reduce((total: number, path: any) => total + (path.rev * 180), 0)}</div>
+                )}
+              </div>
+            </>
+          )}
+
+          {!robotConnected && (
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center text-text-secondary">
+                <div className="text-4xl mb-4">🌀</div>
+                <div className="text-lg">Robot Not Connected</div>
+                <div className="text-sm">Connect robot to use conical spray paths</div>
               </div>
             </div>
           )}

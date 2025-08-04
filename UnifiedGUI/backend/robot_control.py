@@ -13,6 +13,10 @@ from pathlib import Path
 UR_CONTROL_PATH = Path(__file__).resolve().parents[2] / 'UR_Control_Code'
 sys.path.insert(0, str(UR_CONTROL_PATH))
 
+# Add UR_Cold_Spray_Code to path for robot_functions
+UR_COLD_SPRAY_PATH = Path(__file__).resolve().parents[2] / 'UR_Cold_Spray_Code'
+sys.path.insert(0, str(UR_COLD_SPRAY_PATH))
+
 try:
     from robot_controller import RobotController
     from detection_algorithms import ThermalDetector
@@ -23,6 +27,14 @@ except ImportError as e:
     RobotController = None
     ThermalDetector = None
     SpaceMouseController = None
+
+# Import robot_functions for conical spray paths
+try:
+    import robot_functions as rf
+    print("✓ Successfully imported robot_functions")
+except ImportError as e:
+    print(f"✗ Failed to import robot_functions: {e}")
+    rf = None
 
 
 class UnifiedRobotController:
@@ -659,6 +671,53 @@ end
 
 blended_spray()
 """
+
+    def execute_conical_spray_paths(self, spray_paths: list) -> dict:
+        """Execute a list of conical spray paths (1-4 sweeps)"""
+        try:
+            if not self.connected or not self.robot_controller:
+                return {"success": False, "error": "Robot not connected"}
+            
+            if rf is None:
+                return {"success": False, "error": "robot_functions module not available"}
+            
+            print(f"🌀 Executing {len(spray_paths)} conical spray path(s)")
+            
+            for i, path in enumerate(spray_paths, 1):
+                tilt_deg = path['tilt']
+                revolutions = path['rev'] 
+                cycle_s = path['cycle']
+                steps = int(180 * revolutions)  # Always 180 steps per revolution
+                
+                print(f"   ↳ Sweep {i}: tilt={tilt_deg}°, rev={revolutions}, cycle={cycle_s}, steps={steps}")
+                
+                # Execute conical motion with parameters matching spray_test_V2
+                rf.conical_motion_servoj_script(
+                    self.robot_controller.robot,
+                    tilt_deg=tilt_deg,
+                    revolutions=revolutions,
+                    steps=steps,
+                    cycle_s=cycle_s,
+                    lookahead_time=0.2,
+                    gain=1500,  # Match spray_test_V2 gain
+                    sing_tol_deg=1
+                )
+                
+                # Wait for completion like in spray_test_V2
+                time.sleep(1.5)
+                rf.wait_until_idle(self.robot_controller.robot)
+                
+                print(f"   ✓ Sweep {i} completed")
+            rf.translate_tcp(self.robot_controller.robot, dy_mm= -50, acc=1, vel=1)
+            return {
+                "success": True,
+                "message": f"Executed {len(spray_paths)} conical spray path(s) successfully",
+                "paths_executed": len(spray_paths)
+            }
+            
+        except Exception as e:
+            print(f"❌ Conical spray paths error: {e}")
+            return {"success": False, "error": str(e)}
 
     def get_status(self) -> dict:
         """Get current robot status"""

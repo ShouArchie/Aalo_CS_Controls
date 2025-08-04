@@ -143,6 +143,10 @@ The app will proxy WebSocket calls to `localhost:8000` during dev.
 
 The application now includes a **Blended Spray Pattern** system for automated material deposition:
 
+## 7 · Conical Spray Paths Feature
+
+The application includes a **Conical Spray Paths** system based on `spray_test_V2.py` for executing 1-4 conical spray sequences:
+
 ### 🧊 **Pattern Overview**
 - **Tool Alignment**: 20mm Y translation + 13.5° Y rotation (from testing.py)
 - **Blended Spray Pattern**: Forward/reverse cycles with incremental rotation
@@ -173,7 +177,44 @@ The application now includes a **Blended Spray Pattern** system for automated ma
 
 ---
 
-## 7 · Next Steps
+## 7 · Conical Spray Paths Feature
+
+The application includes a **Conical Spray Paths** system based on `spray_test_V2.py` for executing 1-4 conical spray sequences:
+
+### 🌀 **Pattern Overview**
+- **Conical Motion**: 3D conical sweeps using servoj script execution
+- **Multiple Paths**: Support for 1-4 sequential spray paths per execution
+- **Configurable Parameters**: Tilt angle, revolutions, cycle time per path
+- **Step Calculation**: Always 180 steps × revolutions (matching spray_test_V2)
+- **Direct Integration**: Uses robot_functions.conical_motion_servoj_script()
+
+### ⚙️ **Parameters (per path)**
+- **Tilt**: Cone angle in degrees (e.g., 10°, 15°)
+- **Rev**: Number of revolutions (e.g., 2, 4)
+- **Cycle**: Time per step in seconds (e.g., 0.015, 0.0475)
+
+### 📋 **Quick Examples**
+- **Single Path**: `[{"tilt": 15, "rev": 2, "cycle": 0.015}]`
+- **Dual Path**: `[{"tilt": 15, "rev": 4, "cycle": 0.0475}, {"tilt": 10, "rev": 4, "cycle": 0.0475}]`
+- **Quad Path**: Four sequential sweeps with varying parameters
+
+### 🔧 **Technical Implementation**
+- **Backend**: Direct integration with robot_functions.py and spray_test_V2 logic
+- **Frontend**: JSON text input with validation and example buttons
+- **API Endpoints**: 
+  - `POST /api/robot/conical-spray` - Execute 1-4 conical spray paths
+- **Validation**: JSON format, parameter types, and path count limits
+- **Execution**: Sequential path execution with wait_until_idle between sweeps
+
+### 🎯 **Usage Workflow**
+1. **Input Paths**: Enter JSON configuration in text area
+2. **Validate**: Real-time validation with visual feedback
+3. **Execute**: Click execute button to run all paths sequentially
+4. **Monitor**: Progress tracking and estimated duration display
+
+---
+
+## 8 · Next Steps
 1. Test cold spray functionality with connected robot
 2. Add pattern visualization to the views page
 3. Implement additional movement patterns

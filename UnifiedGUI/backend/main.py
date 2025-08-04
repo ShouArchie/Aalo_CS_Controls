@@ -98,6 +98,9 @@ class ColdSprayRequest(BaseModel):
     blend_radius: float = 0.001
     iterations: int = 7
 
+class ConicalSprayRequest(BaseModel):
+    spray_paths: str  # JSON string containing list of spray path dictionaries
+
 # Allow all origins for local setup (laptop-only deployment)
 app.add_middleware(
     CORSMiddleware,
@@ -743,4 +746,33 @@ async def execute_tool_alignment():
         return {"success": False, "error": "Robot controller not available"}
     
     result = robot_controller.execute_tool_alignment()
-    return result 
+    return result
+
+@app.post("/api/robot/conical-spray")
+async def execute_conical_spray_paths(request: ConicalSprayRequest):
+    """Execute 1-4 conical spray paths like spray_test_V2."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    try:
+        import json
+        spray_paths = json.loads(request.spray_paths)
+        
+        # Validate spray paths
+        if not isinstance(spray_paths, list) or len(spray_paths) == 0 or len(spray_paths) > 4:
+            return {"success": False, "error": "Must provide 1-4 spray paths"}
+        
+        # Validate each path has required fields
+        for i, path in enumerate(spray_paths):
+            if not all(key in path for key in ['tilt', 'rev', 'cycle']):
+                return {"success": False, "error": f"Path {i+1} missing required fields (tilt, rev, cycle)"}
+            if not all(isinstance(path[key], (int, float)) for key in ['tilt', 'rev', 'cycle']):
+                return {"success": False, "error": f"Path {i+1} fields must be numeric"}
+        
+        result = robot_controller.execute_conical_spray_paths(spray_paths)
+        return result
+        
+    except json.JSONDecodeError:
+        return {"success": False, "error": "Invalid JSON format for spray paths"}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to parse spray paths: {str(e)}"} 
