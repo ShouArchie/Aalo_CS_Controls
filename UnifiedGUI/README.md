@@ -11,16 +11,19 @@
 UnifiedGUI/
 │
 ├── backend/               # FastAPI service
-│   ├── main.py            # Entry-point – RGB & Thermal WS streams
-│   ├── camera/            # Reusable OpenCV capture helpers   (todo)
-│   ├── robot/             # UR 10e control adapters           (todo)
+│   ├── main.py            # Entry-point – RGB & Thermal WS streams & Robot control
+│   ├── robot_control.py   # UR 10e control implementation
 │   └── requirements.txt   # Python deps
 │
 └── frontend/              # Next.js 14 (app router)
     ├── src/
     │   ├── app/           # Routes
-    │   └── components/    # Shared UI (CameraPanel, HUD, …)
-    ├── tailwind.config.ts # Custom dark + orange sci-fi theme (todo)
+    │   │   ├── page.tsx           # Home/Navigation page
+    │   │   ├── main/page.tsx      # Main dashboard (overview)
+    │   │   ├── views/page.tsx     # Camera views & thermal controls
+    │   │   └── controls/page.tsx  # Robot control interface
+    │   └── components/    # Shared UI (CameraPanel, Settings, etc.)
+    ├── tailwind.config.ts # Custom dark + orange sci-fi theme
     ├── package.json       # TS/React deps
     └── next.config.js     # Runtime options
 ```
@@ -29,7 +32,66 @@ UnifiedGUI/
 
 ---
 
-## 2 · Road-map Tasks
+## 2 · Application Structure
+
+The frontend is now organized into **three distinct pages** for better workflow separation:
+
+### 🏠 **Home Page** (`/`)
+- **Purpose**: Navigation hub and automatic redirect to main dashboard
+- **Features**: 
+  - Quick navigation buttons to all sections
+  - Auto-redirects to `/main` by default
+  - Clean, minimal interface
+
+### 📊 **Main Dashboard** (`/main`)
+- **Purpose**: Overview of all systems with basic controls
+- **Features**:
+  - Dual camera feeds (RGB + Thermal)
+  - System status monitoring
+  - Basic thermal controls (filter toggle, palette switching)
+  - Robot connection status and basic controls
+  - Navigation to specialized pages
+
+### 👁️ **Views Page** (`/views`)
+- **Purpose**: Dedicated camera monitoring and thermal analysis
+- **Features**:
+  - **Larger camera displays** for detailed observation
+  - **Full thermal control suite**:
+    - Temperature filter toggle and range sliders
+    - Color palette cycling
+    - Manual calibration controls
+    - Real-time temperature readings
+  - System status monitoring
+  - Keyboard shortcuts (Alt+F, Alt+T, Alt+P, Alt+C)
+
+### 🤖 **Controls Page** (`/controls`)
+- **Purpose**: Comprehensive robot control interface
+- **Layout**:
+  - **Left Half**: SpeedL continuous movement controls
+    - Base speed configuration (m/s)
+    - Global speed multiplier (0-100%)
+    - Large directional buttons (+X, +Y, +Z, -X, -Y, -Z)
+    - Emergency stop button
+    - Hold-to-move interface with keyboard support (WASD/QE)
+  - **Right Half**: Precision fine movement controls
+    - TCP (Tool Center Point) configuration
+    - Step size definition (mm precision)
+    - Velocity and acceleration settings
+    - Rotation angle configuration
+    - Translation and rotation buttons
+    - Keyboard shortcuts (IJKL/UO for translation, RF/TG/YH for rotation)
+  - **Bottom Section**: Reserved space for future control additions
+
+### 🔧 **Navigation & Features**
+- **Cross-page navigation**: Each page has quick access buttons to other sections
+- **Consistent theming**: Sci-fi tactical interface across all pages
+- **Keyboard shortcuts**: Context-sensitive controls on each page
+- **Robot connection**: Status and controls accessible from all relevant pages
+- **Settings**: Global configuration accessible via F1 or CONFIG button
+
+---
+
+## 3 · Road-map Tasks
 
 | ID | Status | Task |
 |----|--------|------|
@@ -45,7 +107,7 @@ UnifiedGUI/
 
 ---
 
-## 3 · Running Locally
+## 4 · Running Locally
 
 ### Backend
 ```bash
@@ -69,7 +131,7 @@ The app will proxy WebSocket calls to `localhost:8000` during dev.
 
 ---
 
-## 4 · Style Guidelines
+## 5 · Style Guidelines
 • Dark charcoal background `#101012`  
 • Text: off-white `#E0E0E0`  
 • Accent: orange `#FFA200` with glow `drop-shadow(0 0 6px #ffa200)`  
@@ -77,7 +139,7 @@ The app will proxy WebSocket calls to `localhost:8000` during dev.
 
 ---
 
-## 5 · Next Steps
+## 6 · Next Steps
 1. Scaffold the front-end (`frontend-skeleton`).  
 2. Finish camera helper module and FPS measurement.  
 3. Land Tailwind theme + CameraPanel.  
