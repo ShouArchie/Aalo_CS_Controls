@@ -18,26 +18,26 @@ export default function Home() {
         
         {/* Navigation Links */}
         <div className="flex gap-4 mt-8">
-          <button 
+            <button 
             onClick={() => router.push('/main')}
             className="tactical-button px-6 py-3 rounded"
-          >
+            >
             Main Dashboard
-          </button>
-          <button 
+            </button>
+            <button
             onClick={() => router.push('/views')}
             className="tactical-button px-6 py-3 rounded"
           >
             Camera Views
-          </button>
-          <button 
+                      </button>
+                      <button 
             onClick={() => router.push('/controls')}
             className="tactical-button px-6 py-3 rounded"
           >
             Robot Controls
-          </button>
+                    </button>
         </div>
       </div>
     </main>
   );
-}
+} 

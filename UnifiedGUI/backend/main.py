@@ -92,6 +92,12 @@ class TCPRequest(BaseModel):
     tcp_id: int
     tcp_name: str
 
+class ColdSprayRequest(BaseModel):
+    acceleration: float = 0.1
+    velocity: float = 0.1
+    blend_radius: float = 0.001
+    iterations: int = 7
+
 # Allow all origins for local setup (laptop-only deployment)
 app.add_middleware(
     CORSMiddleware,
@@ -714,4 +720,27 @@ async def get_robot_tcp():
         return {"success": False, "error": "Robot controller not available"}
     
     result = robot_controller.get_current_tcp()
+    return result
+
+@app.post("/api/robot/cold-spray")
+async def execute_cold_spray_pattern(request: ColdSprayRequest):
+    """Execute the blended spray pattern with forward/reverse cycles and custom parameters."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.execute_cold_spray_pattern(
+        acc=request.acceleration,
+        vel=request.velocity,
+        blend_r=request.blend_radius,
+        iterations=request.iterations
+    )
+    return result
+
+@app.post("/api/robot/align-tool")
+async def execute_tool_alignment():
+    """Execute tool alignment for cold spray pattern (20mm Y translation + 13.5° Y rotation)."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.execute_tool_alignment()
     return result 

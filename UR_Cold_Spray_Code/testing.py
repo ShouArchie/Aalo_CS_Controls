@@ -71,5 +71,49 @@ print("Complete")
 robot.close()
 
 
+# Align the tool to the spray pattern
+rf.translate_tcp(robot, dy_mm= 20, acc=0.5, vel=0.5)
+rf.rotate_tcp(robot, ry_deg=13.5, acc=0.1, vel=0.1)
 
+# Spray Pattern
+DY_STEP = 0.050    # m  (back-and-forth along tool Y)
+RY_STEP = math.radians(1.36)  # ≈0.0237 rad per incremental rotation
+CYCLES = 5  # forward & reverse passes
 
+UR_SCRIPT_TEMPLATE = f"""
+def blended_spray():
+    # Forward cycles
+    j = 0
+    while j < {iterations}:
+        i = 0
+        while i < {CYCLES}:
+            movel(pose_trans(get_actual_tcp_pose(), p[0, -{DY_STEP}, 0, 0, 0, 0]), a={ACC}, v={VEL}, r={BLEND_R})
+            movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0, 0, {RY_STEP}, 0]), a={ACC}, v={VEL}, r={BLEND_R})
+            movel(pose_trans(get_actual_tcp_pose(), p[0,  {DY_STEP}, 0, 0, 0, 0]), a={ACC}, v={VEL}, r={BLEND_R})
+            if i < {CYCLES} - 1:
+                movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0, 0, {RY_STEP}, 0]), a={ACC}, v={VEL}, r={BLEND_R})
+            end
+            i = i + 1
+        end
+ 
+        # Reverse cycles
+        i = 0
+        while i < {CYCLES}:
+            if i > 0:
+                movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0, 0, -{RY_STEP}, 0]), a={ACC}, v={VEL}, r={BLEND_R})
+            end
+            movel(pose_trans(get_actual_tcp_pose(), p[0, -{DY_STEP}, 0, 0, 0, 0]), a={ACC}, v={VEL}, r={BLEND_R})
+            movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0, 0, -{RY_STEP}, 0]), a={ACC}, v={VEL}, r={BLEND_R})
+            if i < {CYCLES} - 1:
+                movel(pose_trans(get_actual_tcp_pose(), p[0,  {DY_STEP}, 0, 0, 0, 0]), a={ACC}, v={VEL}, r={BLEND_R})
+            end
+            i = i + 1
+        end
+        j = j + 1
+    end
+end
+ 
+# Execute the routine
+blended_spray()
+"""
+ 

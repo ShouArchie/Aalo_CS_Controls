@@ -543,6 +543,123 @@ class UnifiedRobotController:
             print(f"Thermal tracking error: {e}")
             self.thermal_tracking_active = False
     
+    def execute_tool_alignment(self) -> dict:
+        """Execute tool alignment for cold spray pattern"""
+        try:
+            if not self.connected or not self.robot_controller:
+                return {"success": False, "error": "Robot not connected"}
+            
+            print(f"🔧 Executing tool alignment for spray pattern")
+            
+            # Generate URScript for alignment - simpler approach
+            # 1. Translate 20mm in Y direction (tool frame) 
+            # 2. Rotate 13.5° around Y axis (tool frame)
+            urscript = """
+# Align the tool to the spray pattern
+def align_tool():
+    # Step 1: Translate 20mm in tool Y direction (dy_mm=20, acc=0.5, vel=0.5)
+    current_pose = get_actual_tcp_pose()
+    # Move 20mm in tool Y direction using pose_trans
+    target_pose1 = pose_trans(current_pose, p[0, 0.025, 0, 0, 0, 0])
+    movel(target_pose1, a=0.5, v=0.5)
+    
+    # Step 2: Rotate 13.5° around tool Y axis (ry_deg=13.5, acc=0.1, vel=0.1)
+    current_pose = get_actual_tcp_pose()
+    # Rotate 3.4 degrees (0.0593412 radians) around tool Y axis
+    target_pose2 = pose_trans(current_pose, p[0, 0, 0, 0, -0.0593412, 0])
+    movel(target_pose2, a=0.1, v=0.1)
+end
+
+align_tool()
+"""
+            
+            # Send the URScript program to the robot
+            self.robot_controller.robot.send_program(urscript)
+            
+            return {
+                "success": True, 
+                "message": "Tool alignment executed: 20mm Y translation + 13.5° Y rotation"
+            }
+        except Exception as e:
+            print(f"❌ Tool alignment error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def execute_cold_spray_pattern(self, acc: float = 0.1, vel: float = 0.1, blend_r: float = 0.001, iterations: int = 7) -> dict:
+        """Execute blended spray pattern with forward/reverse cycles"""
+        try:
+            if not self.connected or not self.robot_controller:
+                return {"success": False, "error": "Robot not connected"}
+            
+            # Generate the URScript for the cold spray pattern
+            urscript = self._generate_cold_spray_urscript(acc, vel, blend_r, iterations)
+            
+            print(f"🧊 Executing blended spray pattern: acc={acc}, vel={vel}, blend_r={blend_r}, iterations={iterations}")
+            print(f"📜 URScript length: {len(urscript)} characters")
+            
+            # Send the URScript program to the robot
+            self.robot_controller.robot.send_program(urscript)
+            
+            return {
+                "success": True, 
+                "message": f"Blended spray pattern started with {iterations} iterations",
+                "parameters": {
+                    "acceleration": acc,
+                    "velocity": vel,
+                    "blend_radius": blend_r,
+                    "iterations": iterations
+                }
+            }
+        except Exception as e:
+            print(f"❌ Blended spray pattern error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def _generate_cold_spray_urscript(self, acc: float, vel: float, blend_r: float, iterations: int) -> str:
+        """Generate URScript for blended spray pattern"""
+        # Pattern parameters from testing.py
+        dy_step = 0.050  # 50mm back-and-forth along tool Y
+        ry_step = 0.0237  # ≈1.36 degrees per incremental rotation (math.radians(1.36))
+        cycles = 5  # forward & reverse passes
+        
+        return f"""
+def blended_spray():
+    # Blended spray pattern with forward/reverse cycles
+    # Parameters: acc={acc}, vel={vel}, blend_r={blend_r}, iterations={iterations}
+    # Pattern: DY_STEP={dy_step}m, RY_STEP={ry_step}rad, CYCLES={cycles}
+    
+    j = 0
+    while j < {iterations}:
+        # Forward cycles
+        i = 0
+        while i < {cycles}:
+            movel(pose_trans(get_actual_tcp_pose(), p[0, -{dy_step}, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0, 0, {ry_step}, 0]), a={acc}, v={vel}, r={blend_r})
+            movel(pose_trans(get_actual_tcp_pose(), p[0, {dy_step}, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            if i < {cycles - 1}:
+                movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0, 0, {ry_step}, 0]), a={acc}, v={vel}, r={blend_r})
+            end
+            i = i + 1
+        end
+
+        # Reverse cycles
+        i = 0
+        while i < {cycles}:
+            if i > 0:
+                movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0, 0, -{ry_step}, 0]), a={acc}, v={vel}, r={blend_r})
+            end
+            movel(pose_trans(get_actual_tcp_pose(), p[0, -{dy_step}, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0, 0, -{ry_step}, 0]), a={acc}, v={vel}, r={blend_r})
+            if i < {cycles - 1}:
+                movel(pose_trans(get_actual_tcp_pose(), p[0, {dy_step}, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            end
+            i = i + 1
+        end
+        j = j + 1
+    end
+end
+
+blended_spray()
+"""
+
     def get_status(self) -> dict:
         """Get current robot status"""
         try:

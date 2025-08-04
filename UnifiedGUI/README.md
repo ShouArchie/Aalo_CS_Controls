@@ -80,7 +80,7 @@ The frontend is now organized into **three distinct pages** for better workflow 
     - Rotation angle configuration
     - Translation and rotation buttons
     - Keyboard shortcuts (IJKL/UO for translation, RF/TG/YH for rotation)
-  - **Bottom Section**: Reserved space for future control additions
+  - **Bottom Section**: Cold Spray Pattern controls with customizable parameters
 
 ### 🔧 **Navigation & Features**
 - **Cross-page navigation**: Each page has quick access buttons to other sections
@@ -139,11 +139,45 @@ The app will proxy WebSocket calls to `localhost:8000` during dev.
 
 ---
 
-## 6 · Next Steps
-1. Scaffold the front-end (`frontend-skeleton`).  
-2. Finish camera helper module and FPS measurement.  
-3. Land Tailwind theme + CameraPanel.  
-4. Integrate initial robot endpoints and control widgets.
+## 6 · Blended Spray Pattern Feature
+
+The application now includes a **Blended Spray Pattern** system for automated material deposition:
+
+### 🧊 **Pattern Overview**
+- **Tool Alignment**: 20mm Y translation + 13.5° Y rotation (from testing.py)
+- **Blended Spray Pattern**: Forward/reverse cycles with incremental rotation
+- **Configurable Parameters**: Acceleration, velocity, blend radius, iterations
+- **Movement Scale**: 50mm back-and-forth in Y direction, 1.36° rotation increments
+- **Pattern Structure**: 5 forward + 5 reverse cycles per iteration
+- **URScript Integration**: Direct robot program execution
+
+### ⚙️ **Parameters**
+- **Acceleration**: 0.01-2.0 m/s² (movement acceleration)
+- **Velocity**: 0.01-1.0 m/s (movement speed)
+- **Blend Radius**: 0.0001-0.01 m (path smoothing)
+- **Iterations**: 1-50 cycles (pattern repetitions)
+
+### 🎯 **Quick Presets**
+- **Slow & Precise**: Low speed, high accuracy (0.05 m/s, 5 iterations)
+- **Standard**: Balanced performance (0.1 m/s, 7 iterations)
+- **Fast & Coverage**: High speed, maximum coverage (0.2 m/s, 10 iterations)
+
+### 🔧 **Technical Implementation**
+- **Backend**: URScript generation and robot communication
+- **Frontend**: Parameter validation and execution status tracking
+- **API Endpoints**: 
+  - `POST /api/robot/align-tool` - Tool alignment for spray pattern
+  - `POST /api/robot/cold-spray` - Execute cold spray pattern
+- **Real-time Feedback**: Execution progress and estimated duration
+- **Workflow Integration**: Align tool first, then execute pattern
+
+---
+
+## 7 · Next Steps
+1. Test cold spray functionality with connected robot
+2. Add pattern visualization to the views page
+3. Implement additional movement patterns
+4. Add pattern save/load functionality
 
 ---
 

@@ -40,6 +40,29 @@ export default function ControlsPage() {
   // Theme control
   const [isBeachsideTheme, setIsBeachsideTheme] = useState(false);
 
+  // Blended spray pattern configuration
+  const [coldSprayParams, setColdSprayParams] = useState({
+    acceleration: "0.1",
+    velocity: "0.1",
+    blendRadius: "0.001",
+    iterations: "7"
+  });
+
+  const [toolAligning, setToolAligning] = useState(false);
+
+  // Validation for cold spray parameters
+  const isValidSprayParams = () => {
+    const acc = parseFloat(coldSprayParams.acceleration);
+    const vel = parseFloat(coldSprayParams.velocity);
+    const blend = parseFloat(coldSprayParams.blendRadius);
+    const iter = parseInt(coldSprayParams.iterations);
+    
+    return !isNaN(acc) && acc > 0 &&
+           !isNaN(vel) && vel > 0 &&
+           !isNaN(blend) && blend >= 0 &&
+           !isNaN(iter) && iter > 0;
+  };
+
   // TCP Presets
   const TCP_PRESETS: Record<number, { name: string; offset: number[] }> = {
     1: { name: "Primary TCP", offset: [-278.81, 0.0, 60.3, 0.0, 0.0, 0.0] },
@@ -418,6 +441,72 @@ export default function ControlsPage() {
     }
   };
 
+  const executeColdSprayPattern = async () => {
+    try {
+      if (!robotConnected) {
+        console.error('Robot not connected');
+        return;
+      }
+
+      console.log(`🧊 Executing blended spray pattern with params:`, coldSprayParams);
+
+      const response = await fetch('http://localhost:8000/api/robot/cold-spray', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          acceleration: parseFloat(coldSprayParams.acceleration),
+          velocity: parseFloat(coldSprayParams.velocity),
+          blend_radius: parseFloat(coldSprayParams.blendRadius),
+          iterations: parseInt(coldSprayParams.iterations)
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ Blended spray pattern executed:`, result.message);
+      } else {
+        const error = await response.json();
+        console.error('Failed to execute blended spray pattern:', error.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Failed to execute blended spray pattern:', error);
+    }
+  };
+
+  const executeToolAlignment = async () => {
+    try {
+      if (!robotConnected) {
+        console.error('Robot not connected');
+        return;
+      }
+
+      setToolAligning(true);
+      console.log(`🔧 Executing tool alignment`);
+
+      const response = await fetch('http://localhost:8000/api/robot/align-tool', {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ Tool alignment executed:`, result.message);
+        
+        // Alignment should complete quickly (translate + rotate)
+        setTimeout(() => {
+          setToolAligning(false);
+          console.log('🏁 Tool alignment completed');
+        }, 3000); // 3 seconds estimated duration
+      } else {
+        const error = await response.json();
+        console.error('Failed to execute tool alignment:', error.error || 'Unknown error');
+        setToolAligning(false);
+      }
+    } catch (error) {
+      console.error('Failed to execute tool alignment:', error);
+      setToolAligning(false);
+    }
+  };
+
   return (
     <main className="min-h-screen relative overflow-hidden">
       {/* Background Grid */}
@@ -477,7 +566,7 @@ export default function ControlsPage() {
       </div>
 
       {/* Main Control Layout */}
-      <div className="p-2 h-[calc(100vh-80px)]">
+      <div className="p-2 min-h-[calc(100vh-80px)] overflow-y-auto">
         {/* Robot Connection & Status Header */}
         <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-3 mb-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -546,9 +635,9 @@ export default function ControlsPage() {
         </div>
 
         {/* Two Column Layout: SpeedL (Left) | Fine Movement (Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100%-120px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* LEFT HALF: SpeedL Controls */}
-          <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-4 space-y-4 overflow-y-auto">
+          <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-3 space-y-3">
             <div className="flex items-center gap-2">
               <div className="status-indicator bg-warning"></div>
               <h3 className="text-lg font-tactical text-accent font-medium">SpeedL Continuous Movement</h3>
@@ -557,7 +646,7 @@ export default function ControlsPage() {
             {robotConnected && (
               <>
                 {/* Speed Configuration */}
-                <div className="space-y-4 border-b border-accent/20 pb-4">
+                <div className="space-y-2 border-b border-accent/20 pb-3">
                   <h4 className="text-sm text-accent font-tactical">Speed Configuration</h4>
                   
                   {/* Base Speed Input */}
@@ -618,7 +707,7 @@ export default function ControlsPage() {
                 </div>
 
                 {/* Continuous Movement Controls */}
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <h4 className="text-sm text-accent font-tactical">Continuous Movement (Base Coordinates)</h4>
                   
                   {/* Large Movement Buttons */}
@@ -627,7 +716,7 @@ export default function ControlsPage() {
                       onMouseDown={() => moveRobot('x+')} 
                       onMouseUp={stopRobot}
                       onMouseLeave={stopRobot}
-                      className="tactical-button py-4 px-4 text-lg font-bold select-none"
+                      className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       +X
                     </button>
@@ -635,7 +724,7 @@ export default function ControlsPage() {
                       onMouseDown={() => moveRobot('y+')} 
                       onMouseUp={stopRobot}
                       onMouseLeave={stopRobot}
-                      className="tactical-button py-4 px-4 text-lg font-bold select-none"
+                      className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       +Y
                     </button>
@@ -643,7 +732,7 @@ export default function ControlsPage() {
                       onMouseDown={() => moveRobot('z+')} 
                       onMouseUp={stopRobot}
                       onMouseLeave={stopRobot}
-                      className="tactical-button py-4 px-4 text-lg font-bold select-none"
+                      className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       +Z
                     </button>
@@ -651,7 +740,7 @@ export default function ControlsPage() {
                       onMouseDown={() => moveRobot('x-')} 
                       onMouseUp={stopRobot}
                       onMouseLeave={stopRobot}
-                      className="tactical-button py-4 px-4 text-lg font-bold select-none"
+                      className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       -X
                     </button>
@@ -659,7 +748,7 @@ export default function ControlsPage() {
                       onMouseDown={() => moveRobot('y-')} 
                       onMouseUp={stopRobot}
                       onMouseLeave={stopRobot}
-                      className="tactical-button py-4 px-4 text-lg font-bold select-none"
+                      className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       -Y
                     </button>
@@ -667,30 +756,30 @@ export default function ControlsPage() {
                       onMouseDown={() => moveRobot('z-')} 
                       onMouseUp={stopRobot}
                       onMouseLeave={stopRobot}
-                      className="tactical-button py-4 px-4 text-lg font-bold select-none"
+                      className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       -Z
                     </button>
                   </div>
                   
                   {/* Emergency Stop Button */}
-                  <div className="flex justify-center mt-6">
+                  <div className="flex justify-center mt-3">
                     <button 
                       onClick={stopRobot}
-                      className="w-32 h-32 bg-red-600 hover:bg-red-700 text-white font-bold text-lg border-4 border-red-500 shadow-xl hover:shadow-red-500/50 transition-all duration-200 flex flex-col items-center justify-center gap-2 active:scale-95 rounded-lg"
+                      className="w-24 h-24 bg-red-600 hover:bg-red-700 text-white font-bold text-base border-4 border-red-500 shadow-xl hover:shadow-red-500/50 transition-all duration-200 flex flex-col items-center justify-center gap-1 active:scale-95 rounded-lg"
                       style={{
                         background: 'linear-gradient(145deg, #dc2626, #b91c1c)',
                         boxShadow: '0 8px 20px rgba(239, 68, 68, 0.4), inset 0 4px 8px rgba(255, 255, 255, 0.1)'
                       }}
                     >
-                      <span className="text-3xl">🛑</span>
-                      <span className="text-sm leading-tight">EMERGENCY<br/>STOP</span>
+                      <span className="text-2xl">🛑</span>
+                      <span className="text-xs leading-tight">E-STOP</span>
                     </button>
                   </div>
 
                   {/* Keyboard Hints */}
-                  <div className="text-sm text-text-secondary bg-surface-dark/50 p-3 rounded">
-                    <div className="font-bold text-accent mb-2">Keyboard Controls:</div>
+                  <div className="text-xs text-text-secondary bg-surface-dark/50 p-2 rounded">
+                    <div className="font-bold text-accent mb-1">Keyboard Controls:</div>
                     <div>WASD/QE: Continuous movement (hold keys)</div>
                     <div>Release keys to stop movement</div>
                   </div>
@@ -710,7 +799,7 @@ export default function ControlsPage() {
           </div>
 
           {/* RIGHT HALF: Fine Movement Controls */}
-          <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-4 space-y-4 overflow-y-auto">
+          <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-3 space-y-3">
             <div className="flex items-center gap-2">
               <div className="status-indicator bg-info"></div>
               <h3 className="text-lg font-tactical text-accent font-medium">Fine Movement (mm precision)</h3>
@@ -719,7 +808,7 @@ export default function ControlsPage() {
             {robotConnected && (
               <>
                 {/* TCP Configuration */}
-                <div className="space-y-3 border-b border-accent/20 pb-4">
+                <div className="space-y-2 border-b border-accent/20 pb-3">
                   <label className="text-sm text-accent font-tactical">TCP Configuration</label>
                   <div className="space-y-2">
                     <Select 
@@ -784,7 +873,7 @@ export default function ControlsPage() {
                 </div>
 
                 {/* Fine Movement Parameters */}
-                <div className="space-y-4 border-b border-accent/20 pb-4">
+                <div className="space-y-2 border-b border-accent/20 pb-3">
                   <h4 className="text-sm text-accent font-tactical">Movement Parameters</h4>
                   
                   {/* Step Size */}
@@ -879,34 +968,34 @@ export default function ControlsPage() {
                 </div>
                 
                 {/* Fine Movement Buttons */}
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <div className="space-y-3">
                     <div className="text-sm text-accent font-bold">Translation ({fineStepSize}mm steps)</div>
                     <div className="grid grid-cols-3 gap-2">
-                      <button onClick={() => moveFine('x+')} className="tactical-button py-3 px-3 text-sm font-semibold">+X</button>
-                      <button onClick={() => moveFine('y+')} className="tactical-button py-3 px-3 text-sm font-semibold">+Y</button>
-                      <button onClick={() => moveFine('z+')} className="tactical-button py-3 px-3 text-sm font-semibold">+Z</button>
-                      <button onClick={() => moveFine('x-')} className="tactical-button py-3 px-3 text-sm font-semibold">-X</button>
-                      <button onClick={() => moveFine('y-')} className="tactical-button py-3 px-3 text-sm font-semibold">-Y</button>
-                      <button onClick={() => moveFine('z-')} className="tactical-button py-3 px-3 text-sm font-semibold">-Z</button>
+                      <button onClick={() => moveFine('x+')} className="tactical-button py-2 px-2 text-sm font-semibold">+X</button>
+                      <button onClick={() => moveFine('y+')} className="tactical-button py-2 px-2 text-sm font-semibold">+Y</button>
+                      <button onClick={() => moveFine('z+')} className="tactical-button py-2 px-2 text-sm font-semibold">+Z</button>
+                      <button onClick={() => moveFine('x-')} className="tactical-button py-2 px-2 text-sm font-semibold">-X</button>
+                      <button onClick={() => moveFine('y-')} className="tactical-button py-2 px-2 text-sm font-semibold">-Y</button>
+                      <button onClick={() => moveFine('z-')} className="tactical-button py-2 px-2 text-sm font-semibold">-Z</button>
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     <div className="text-sm text-accent font-bold">Rotation ({rotationAngle}° steps)</div>
                     <div className="grid grid-cols-3 gap-2">
-                      <button onClick={() => moveRotation('rx+')} className="tactical-button py-3 px-3 text-sm font-semibold">+Rx</button>
-                      <button onClick={() => moveRotation('ry+')} className="tactical-button py-3 px-3 text-sm font-semibold">+Ry</button>
-                      <button onClick={() => moveRotation('rz+')} className="tactical-button py-3 px-3 text-sm font-semibold">+Rz</button>
-                      <button onClick={() => moveRotation('rx-')} className="tactical-button py-3 px-3 text-sm font-semibold">-Rx</button>
-                      <button onClick={() => moveRotation('ry-')} className="tactical-button py-3 px-3 text-sm font-semibold">-Ry</button>
-                      <button onClick={() => moveRotation('rz-')} className="tactical-button py-3 px-3 text-sm font-semibold">-Rz</button>
+                      <button onClick={() => moveRotation('rx+')} className="tactical-button py-2 px-2 text-sm font-semibold">+Rx</button>
+                      <button onClick={() => moveRotation('ry+')} className="tactical-button py-2 px-2 text-sm font-semibold">+Ry</button>
+                      <button onClick={() => moveRotation('rz+')} className="tactical-button py-2 px-2 text-sm font-semibold">+Rz</button>
+                      <button onClick={() => moveRotation('rx-')} className="tactical-button py-2 px-2 text-sm font-semibold">-Rx</button>
+                      <button onClick={() => moveRotation('ry-')} className="tactical-button py-2 px-2 text-sm font-semibold">-Ry</button>
+                      <button onClick={() => moveRotation('rz-')} className="tactical-button py-2 px-2 text-sm font-semibold">-Rz</button>
                     </div>
                   </div>
                   
                   {/* Keyboard Hints */}
-                  <div className="text-sm text-text-secondary bg-surface-dark/50 p-3 rounded">
-                    <div className="font-bold text-accent mb-2">Keyboard Controls:</div>
+                  <div className="text-xs text-text-secondary bg-surface-dark/50 p-2 rounded">
+                    <div className="font-bold text-accent mb-1">Keyboard Controls:</div>
                     <div>IJKL/UO: Translation ({fineStepSize}mm)</div>
                     <div>RF/TG/YH: Rotation Rx/Ry/Rz ({rotationAngle}°)</div>
                   </div>
@@ -926,11 +1015,182 @@ export default function ControlsPage() {
           </div>
         </div>
 
-        {/* Bottom section for future additions */}
-        <div className="mt-4 h-16 bg-black/5 backdrop-blur-sm rounded border border-accent/10 p-3 flex items-center justify-center">
-          <div className="text-text-secondary text-sm font-mono">
-            [ RESERVED SPACE FOR FUTURE CONTROLS ]
+        {/* Blended Spray Pattern Controls */}
+        <div className="mt-3 bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="status-indicator bg-info"></div>
+            <h3 className="text-lg font-tactical text-accent font-medium">Blended Spray Pattern</h3>
           </div>
+
+          {robotConnected && (
+            <>
+              {/* Blended Spray Parameters */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-2">
+                  <label className="text-sm text-text-secondary">Acceleration (m/s²)</label>
+                  <Input
+                    type="number"
+                    value={coldSprayParams.acceleration}
+                    onChange={(e) => setColdSprayParams(prev => ({
+                      ...prev,
+                      acceleration: e.target.value
+                    }))}
+                    step="0.01"
+                    min="0"
+                    max="2.0"
+                    className="text-sm bg-surface-dark border-accent/30 text-text-primary"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-text-secondary">Velocity (m/s)</label>
+                  <Input
+                    type="number"
+                    value={coldSprayParams.velocity}
+                    onChange={(e) => setColdSprayParams(prev => ({
+                      ...prev,
+                      velocity: e.target.value
+                    }))}
+                    step="0.01"
+                    min="0"
+                    max="1.0"
+                    className="text-sm bg-surface-dark border-accent/30 text-text-primary"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-text-secondary">Blend Radius (m)</label>
+                  <Input
+                    type="number"
+                    value={coldSprayParams.blendRadius}
+                    onChange={(e) => setColdSprayParams(prev => ({
+                      ...prev,
+                      blendRadius: e.target.value
+                    }))}
+                    step="0.0001"
+                    min="0"
+                    max="0.01"
+                    className="text-sm bg-surface-dark border-accent/30 text-text-primary"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-text-secondary">Iterations</label>
+                  <Input
+                    type="number"
+                    value={coldSprayParams.iterations}
+                    onChange={(e) => setColdSprayParams(prev => ({
+                      ...prev,
+                      iterations: e.target.value
+                    }))}
+                    step="1"
+                    min="0"
+                    max="50"
+                    className="text-sm bg-surface-dark border-accent/30 text-text-primary"
+                  />
+                </div>
+              </div>
+
+              {/* Preset Buttons */}
+              <div className="space-y-2">
+                <label className="text-sm text-text-secondary">Quick Presets</label>
+                <div className="flex gap-2 flex-wrap">
+                  <button 
+                    onClick={() => setColdSprayParams({
+                      acceleration: "0.05",
+                      velocity: "0.05",
+                      blendRadius: "0.001",
+                      iterations: "5"
+                    })}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Slow & Precise
+                  </button>
+                  <button 
+                    onClick={() => setColdSprayParams({
+                      acceleration: "0.1",
+                      velocity: "0.1",
+                      blendRadius: "0.001",
+                      iterations: "7"
+                    })}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Standard
+                  </button>
+                  <button 
+                    onClick={() => setColdSprayParams({
+                      acceleration: "0.2",
+                      velocity: "0.2",
+                      blendRadius: "0.002",
+                      iterations: "10"
+                    })}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Fast & Coverage
+                  </button>
+                </div>
+              </div>
+
+              {/* Align and Execute Buttons */}
+              <div className="space-y-3">
+                {/* Align Tool Button */}
+                <div className="flex justify-center">
+                  <button 
+                    onClick={executeToolAlignment}
+                    disabled={toolAligning}
+                    className={`tactical-button py-3 px-6 text-base font-bold rounded-lg ${
+                      toolAligning 
+                        ? 'opacity-50 cursor-not-allowed' 
+                        : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700'
+                    }`}
+                  >
+                    {toolAligning ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                        ALIGNING TOOL...
+                      </div>
+                    ) : (
+                      '🔧 ALIGN TOOL FOR SPRAY PATTERN'
+                    )}
+                  </button>
+                </div>
+
+                {/* Execute Pattern Button */}
+                <div className="flex justify-center">
+                                    <button
+                    onClick={executeColdSprayPattern}
+                    disabled={toolAligning || !isValidSprayParams()}
+                    className={`tactical-button py-4 px-8 text-lg font-bold rounded-lg ${
+                      toolAligning || !isValidSprayParams()
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'
+                    }`}
+                  >
+                    🧊 EXECUTE BLENDED SPRAY PATTERN
+                  </button>
+                </div>
+              </div>
+
+              {/* Pattern Info */}
+              <div className="text-xs text-text-secondary bg-surface-dark/50 p-3 rounded">
+                <div className="font-bold text-accent mb-2">Workflow:</div>
+                <div>1. <span className="text-amber-400">ALIGN TOOL:</span> 20mm Y translation + 13.5° Y rotation</div>
+                <div>2. <span className="text-cyan-400">EXECUTE PATTERN:</span> Blended spray (forward/reverse cycles)</div>
+                <div>• Movement distance: 50mm back-and-forth in Y direction</div>
+                <div>• Rotation increment: 1.36° per step</div>
+                <div>• Pattern structure: 5 forward + 5 reverse cycles per iteration</div>
+                <div>• Total iterations: {coldSprayParams.iterations || '0'} cycles</div>
+                <div>• Estimated duration: ~{Math.round((parseInt(coldSprayParams.iterations) || 1) * 60 / (parseFloat(coldSprayParams.velocity) || 0.1))}s</div>
+              </div>
+            </>
+          )}
+
+          {!robotConnected && (
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center text-text-secondary">
+                <div className="text-4xl mb-4">🧊</div>
+                <div className="text-lg">Robot Not Connected</div>
+                <div className="text-sm">Connect robot to use cold spray pattern</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
