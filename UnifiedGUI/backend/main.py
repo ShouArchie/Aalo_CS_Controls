@@ -412,7 +412,7 @@ def _init_rgb() -> CameraStream | None:
 
 
 # Initialize RGB camera with retry mechanism
-def init_rgb_camera_with_retry(max_attempts=3) -> CameraStream | None:
+def init_rgb_camera_with_retry(max_attempts=1) -> CameraStream | None:
     """Initialize RGB camera with retry mechanism."""
     print(f"🔄 Attempting to initialize RGB camera (max {max_attempts} attempts)...")
     
@@ -444,10 +444,10 @@ def init_rgb_camera_with_retry(max_attempts=3) -> CameraStream | None:
     print("❌ RGB camera initialization failed after all attempts")
     return None
 
-rgb_stream = init_rgb_camera_with_retry(max_attempts=3)
+rgb_stream = init_rgb_camera_with_retry(max_attempts=1)
 
 # Initialize thermal camera with retry mechanism  
-def init_thermal_camera_with_retry(max_attempts=3) -> HT301Stream | CameraStream | None:
+def init_thermal_camera_with_retry(max_attempts=1) -> HT301Stream | CameraStream | None:
     """Initialize thermal camera with retry mechanism."""
     print(f"🔄 Attempting to initialize thermal camera (max {max_attempts} attempts)...")
     
@@ -486,7 +486,7 @@ def init_thermal_camera_with_retry(max_attempts=3) -> HT301Stream | CameraStream
     print("❌ Thermal camera initialization failed after all attempts")
     return None
 
-thermal_stream = init_thermal_camera_with_retry(max_attempts=3)
+thermal_stream = init_thermal_camera_with_retry(max_attempts=1)
 
 # Start streams ensured above; collect running list for shutdown
 running_streams = [s for s in (rgb_stream, thermal_stream) if s]
@@ -866,4 +866,36 @@ async def execute_conical_spray_paths(request: ConicalSprayRequest):
     except json.JSONDecodeError:
         return {"success": False, "error": "Invalid JSON format for spray paths"}
     except Exception as e:
-        return {"success": False, "error": f"Failed to parse spray paths: {str(e)}"} 
+        return {"success": False, "error": f"Failed to parse spray paths: {str(e)}"}
+
+
+# Server configuration for network access
+if __name__ == "__main__":
+    import uvicorn
+    import socket
+    
+    # Get the local IP address
+    hostname = socket.gethostname()
+    local_ip = socket.gethostbyname(hostname)
+    
+    print("\n" + "="*70)
+    print("🌐 UNIFIEDGUI BACKEND - NETWORK ACCESS ENABLED")
+    print("="*70)
+    print(f"🖥️  Local Access:    http://localhost:8000")
+    print(f"🌍 Network Access:   http://{local_ip}:8000")
+    print(f"📡 WebSocket RGB:    ws://{local_ip}:8000/ws/rgb")
+    print(f"🌡️  WebSocket Thermal: ws://{local_ip}:8000/ws/thermal")
+    print(f"🎮 API Base:         http://{local_ip}:8000/api/")
+    print("="*70)
+    print("⚠️  MAKE SURE TO UPDATE FRONTEND URLS TO USE THE NETWORK IP")
+    print("   Example: Change 'localhost:8000' to f'{local_ip}:8000' in frontend")
+    print("="*70 + "\n")
+    
+    # Start server with network access (bind to 0.0.0.0)
+    uvicorn.run(
+        app,  # Pass the app object directly
+        host="0.0.0.0",  # Listen on all network interfaces
+        port=8000,
+        reload=False,  # Disable reload in production
+        log_level="info"
+    ) 

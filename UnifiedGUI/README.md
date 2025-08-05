@@ -142,27 +142,96 @@ The backend provides a detailed startup summary showing:
 
 ---
 
-## 4 · Running Locally
+## 4 · Network Access Setup
+
+### 🌐 **Accessing from Other Computers**
+
+The UnifiedGUI backend can be accessed from other computers on the same network:
+
+#### **Quick Setup:**
+
+1. **Start Backend with Network Access:**
+   ```bash
+   cd UnifiedGUI/backend
+   python main.py  # Shows network IP in startup banner
+   ```
+
+2. **Note the Network IP** (e.g., `192.168.1.100` shown in banner)
+
+3. **Access from Other Computers:**
+   - **Frontend**: `http://YOUR_IP:3000` (if running Next.js dev server with `--host 0.0.0.0`)
+   - **Backend API**: `http://YOUR_IP:8000`
+   - **Robot Controls**: Access via the frontend URL above
+
+#### **Frontend Network Configuration:**
+
+**Option A - Quick (Current Session Only):**
+- Use localhost for development, backend handles CORS for all origins
+
+**Option B - Permanent (Recommended for Production):**
+1. Edit `UnifiedGUI/frontend/src/lib/config.ts`
+2. Change: `const API_HOST = 'YOUR_NETWORK_IP';`
+3. Restart frontend: `npm run dev`
+
+#### **Firewall Configuration:**
+- **Windows**: Allow ports 3000 (frontend) and 8000 (backend) through Windows Defender
+- **Router**: Ensure computers are on same network/subnet
+
+#### **Example Access:**
+```
+Primary Computer (Running Services):
+├── Backend:  http://192.168.1.100:8000
+└── Frontend: http://192.168.1.100:3000
+
+Remote Computer (Accessing):
+├── Open browser: http://192.168.1.100:3000
+└── Robot controls work automatically via frontend proxy
+```
+
+---
+
+## 5 · Running Locally
 
 ### Backend
+
+**Local Development:**
 ```bash
 cd UnifiedGUI/backend
 python -m venv .venv && source .venv/bin/activate  # optional
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
-Server boots on `http://127.0.0.1:8000` with:
+
+**Network Access (Recommended):**
+```bash
+cd UnifiedGUI/backend
+python main.py  # Auto-detects network IP and shows access URLs
+```
+
+Server provides:
 * `/` – health-check JSON
+* `/api/status` – system component status
 * `/ws/rgb` – binary JPEG stream
 * `/ws/thermal` – binary JPEG stream
+* `/api/robot/*` – robot control endpoints
 
-### Front-end *(after scaffold)*
+### Frontend
+
+**Local Development:**
 ```bash
 cd UnifiedGUI/frontend
 npm install
 npm run dev
 ```
-The app will proxy WebSocket calls to `localhost:8000` during dev.
+
+**Network Access:**
+```bash
+cd UnifiedGUI/frontend
+npm install
+npm run dev:network  # Accessible from other computers on network
+```
+
+The app will connect to the backend API automatically.
 
 ---
 

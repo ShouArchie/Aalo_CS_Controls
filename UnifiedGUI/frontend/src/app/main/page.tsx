@@ -8,6 +8,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_ENDPOINTS, WS_ENDPOINTS } from '@/lib/config';
 
 export default function MainDashboard() {
   const router = useRouter();
@@ -88,7 +89,7 @@ export default function MainDashboard() {
   // Thermal control functions
   const toggleTemperatureFilter = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/thermal/filter/toggle', {
+      const response = await fetch(API_ENDPOINTS.THERMAL_FILTER_TOGGLE, {
         method: 'POST'
       });
       const data = await response.json();

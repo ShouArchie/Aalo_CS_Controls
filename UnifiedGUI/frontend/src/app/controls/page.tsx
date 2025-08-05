@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_ENDPOINTS } from '@/lib/config';
 
 export default function ControlsPage() {
   const router = useRouter();
@@ -31,11 +32,11 @@ export default function ControlsPage() {
   
   // TCP configuration
   const [selectedTcp, setSelectedTcp] = useState(1);
-  const [customTcp, setCustomTcp] = useState([-278.81, 0, 60.3, 0, 0, 0]); // [x, y, z, rx, ry, rz]
+  const [customTcp, setCustomTcp] = useState([-278.81, 0, 66.65, 0, 0, 0]); // [x, y, z, rx, ry, rz]
   
   // Global speed control
   const [globalSpeedPercent, setGlobalSpeedPercent] = useState(100);  // 0-100%
-  const [baseSpeed, setBaseSpeed] = useState(0.1);  // Base speed for speedL (m/s)
+  const [baseSpeed, setBaseSpeed] = useState(0.05);  // Base speed for speedL (m/s)
   
   // Theme control
   const [isBeachsideTheme, setIsBeachsideTheme] = useState(false);
@@ -94,9 +95,9 @@ export default function ControlsPage() {
 
   // TCP Presets
   const TCP_PRESETS: Record<number, { name: string; offset: number[] }> = {
-    1: { name: "TCP Offset + 20mm", offset: [-278.81, 0.0, 60.3, 0.0, 0.0, 0.0] },
-    2: { name: "TCP Center of Pipe + 20mm", offset: [-362.9475, 0.0, 60.3, 0.0, 0.0, 0.0] },
-    3: { name: "TCP Offset + 0mm", offset: [-258.81, 0.0, 60.3, 0.0, 0.0, 0.0] },
+    1: { name: "TCP Offset + 20mm", offset: [-278.81, 0.0, 66.65, 0.0, 0.0, 0.0] },
+    2: { name: "TCP Center of Pipe + 20mm", offset: [-362.9475, 0.0, 66.65, 0.0, 0.0, 0.0] },
+    3: { name: "TCP Offset + 0mm", offset: [-258.81, 0.0, 66.65, 0.0, 0.0, 0.0] },
     4: { name: "No TCP (Base)", offset: [0, 0, 0, 0, 0, 0] },
     5: { name: "Custom TCP", offset: customTcp }
   };
@@ -128,6 +129,10 @@ export default function ControlsPage() {
 
   // Handle speedL movement (WASD/QE) - continuous sending while held
   const speedLIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Handle mouse hold movement - continuous sending while mouse held
+  const mouseHoldIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [mouseHoldDirection, setMouseHoldDirection] = useState<string | null>(null);
   
   useEffect(() => {
     const speedLKeys = ['w', 's', 'a', 'd', 'q', 'e'];
@@ -193,11 +198,39 @@ export default function ControlsPage() {
     }
   }, [pressedKeys, robotConnected]);
   
-  // Clean up interval on unmount
+  // Handle mouse hold continuous movement
+  useEffect(() => {
+    if (mouseHoldDirection && robotConnected) {
+      // Send initial command immediately
+      moveRobot(mouseHoldDirection, 0.1);
+      
+      // Set up interval for continuous movement
+      mouseHoldIntervalRef.current = setInterval(() => {
+        moveRobot(mouseHoldDirection, 0.1);
+      }, 150); // Send every 150ms like WASD
+    } else {
+      // Clear interval and stop movement
+      if (mouseHoldIntervalRef.current) {
+        clearInterval(mouseHoldIntervalRef.current);
+        mouseHoldIntervalRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (mouseHoldIntervalRef.current) {
+        clearInterval(mouseHoldIntervalRef.current);
+      }
+    };
+  }, [mouseHoldDirection, robotConnected]);
+
+  // Clean up intervals on unmount
   useEffect(() => {
     return () => {
       if (speedLIntervalRef.current) {
         clearInterval(speedLIntervalRef.current);
+      }
+      if (mouseHoldIntervalRef.current) {
+        clearInterval(mouseHoldIntervalRef.current);
       }
     };
   }, []);
@@ -324,7 +357,7 @@ export default function ControlsPage() {
   // Robot control functions
   const connectRobot = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/robot/connect', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_CONNECT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ip: robotIp })
@@ -343,7 +376,7 @@ export default function ControlsPage() {
 
   const disconnectRobot = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/robot/disconnect', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_DISCONNECT, {
         method: 'POST'
       });
       if (response.ok) {
@@ -358,7 +391,7 @@ export default function ControlsPage() {
 
   const moveToHomeJoints = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/robot/home-joints', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_HOME_JOINTS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -376,7 +409,7 @@ export default function ControlsPage() {
 
   const updateHomeJoints = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/robot/config/home-joints', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_CONFIG_HOME_JOINTS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ joints: homeJoints })
@@ -392,7 +425,7 @@ export default function ControlsPage() {
 
   const toggleThermalTracking = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/robot/thermal-tracking', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_THERMAL_TRACKING, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !thermalTracking })
@@ -405,10 +438,22 @@ export default function ControlsPage() {
     }
   };
 
+  // Mouse hold movement handlers
+  const startMouseHold = (direction: string) => {
+    console.log(`🖱️ Starting mouse hold movement: ${direction}`);
+    setMouseHoldDirection(direction);
+  };
+
+  const stopMouseHold = () => {
+    console.log(`🖱️ Stopping mouse hold movement`);
+    setMouseHoldDirection(null);
+    stopRobot();
+  };
+
   const moveRobot = async (direction: string, distance: number = 0.05) => {
     try {
       console.log(`🚀 Frontend moveRobot: direction=${direction}, speed_percent=${globalSpeedPercent}%, base_speed=${baseSpeed}`);
-      const response = await fetch('http://localhost:8000/api/robot/move', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_MOVE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -434,7 +479,7 @@ export default function ControlsPage() {
       console.log('🛑 Frontend stopRobot called - sending immediate stop');
       
       // Send stop command without waiting for response to minimize delay
-      fetch('http://localhost:8000/api/robot/stop', {
+      fetch(API_ENDPOINTS.ROBOT_STOP, {
         method: 'POST'
       }).catch(error => {
         console.error('Failed to stop robot:', error);
@@ -442,7 +487,7 @@ export default function ControlsPage() {
       
       // Also send a second stop command with a tiny delay for redundancy
       setTimeout(() => {
-        fetch('http://localhost:8000/api/robot/stop', {
+        fetch(API_ENDPOINTS.ROBOT_STOP, {
           method: 'POST'
         }).catch(error => {
           console.error('Failed to send redundant stop:', error);
@@ -460,7 +505,7 @@ export default function ControlsPage() {
       const adjustedVelocity = fineVelocity * (globalSpeedPercent / 100);
       const adjustedAcceleration = fineAcceleration * (globalSpeedPercent / 100);
       
-      const response = await fetch('http://localhost:8000/api/robot/move-fine', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_MOVE_FINE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -488,7 +533,7 @@ export default function ControlsPage() {
       // Apply global speed multiplier to angular velocity
       const adjustedAngularVelocity = 0.1 * (globalSpeedPercent / 100); // Base angular velocity in rad/s
       
-      const response = await fetch('http://localhost:8000/api/robot/move-rotation', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_MOVE_ROTATION, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -516,7 +561,7 @@ export default function ControlsPage() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/api/robot/tcp-position');
+              const response = await fetch(API_ENDPOINTS.ROBOT_TCP_POSITION);
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
@@ -558,7 +603,7 @@ export default function ControlsPage() {
 
   const updateFineStepSize = async (newStepSize: number) => {
     try {
-      const response = await fetch('http://localhost:8000/api/robot/config/step-size', {
+              const response = await fetch(API_ENDPOINTS.ROBOT_CONFIG_STEP_SIZE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ step_size_mm: newStepSize })
@@ -583,7 +628,7 @@ export default function ControlsPage() {
       const tcpOffset = tcpId === 5 ? customTcp : TCP_PRESETS[tcpId].offset;
       console.log(`🔧 Applying TCP ${tcpId} to robot: [${tcpOffset.join(', ')}]`);
       
-      const response = await fetch('http://localhost:8000/api/robot/set-tcp', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_SET_TCP, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -618,7 +663,7 @@ export default function ControlsPage() {
 
       console.log(`🧊 Executing blended spray pattern with params:`, coldSprayParams);
 
-      const response = await fetch('http://localhost:8000/api/robot/cold-spray', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_COLD_SPRAY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -651,7 +696,7 @@ export default function ControlsPage() {
       setToolAligning(true);
       console.log(`🔧 Executing tool alignment`);
 
-      const response = await fetch('http://localhost:8000/api/robot/align-tool', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_ALIGN_TOOL, {
         method: 'POST'
       });
 
@@ -691,7 +736,7 @@ export default function ControlsPage() {
 
       console.log(`🌀 Executing conical spray paths:`, conicalSprayPaths);
 
-      const response = await fetch('http://localhost:8000/api/robot/conical-spray', {
+      const response = await fetch(API_ENDPOINTS.ROBOT_CONICAL_SPRAY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -953,48 +998,48 @@ export default function ControlsPage() {
                   {/* Large Movement Buttons */}
                   <div className="grid grid-cols-3 gap-3">
                     <button 
-                      onMouseDown={() => moveRobot('x+')} 
-                      onMouseUp={stopRobot}
+                                      onMouseDown={() => startMouseHold('x+')}
+                onMouseUp={stopMouseHold}
                       onMouseLeave={stopRobot}
                       className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       +X
                     </button>
                     <button 
-                      onMouseDown={() => moveRobot('y+')} 
-                      onMouseUp={stopRobot}
+                                      onMouseDown={() => startMouseHold('y+')}
+                onMouseUp={stopMouseHold}
                       onMouseLeave={stopRobot}
                       className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       +Y
                     </button>
                     <button 
-                      onMouseDown={() => moveRobot('z+')} 
-                      onMouseUp={stopRobot}
+                                      onMouseDown={() => startMouseHold('z+')}
+                onMouseUp={stopMouseHold}
                       onMouseLeave={stopRobot}
                       className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       +Z
                     </button>
                     <button 
-                      onMouseDown={() => moveRobot('x-')} 
-                      onMouseUp={stopRobot}
+                                      onMouseDown={() => startMouseHold('x-')}
+                onMouseUp={stopMouseHold}
                       onMouseLeave={stopRobot}
                       className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       -X
                     </button>
                     <button 
-                      onMouseDown={() => moveRobot('y-')} 
-                      onMouseUp={stopRobot}
+                                      onMouseDown={() => startMouseHold('y-')}
+                onMouseUp={stopMouseHold}
                       onMouseLeave={stopRobot}
                       className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
                       -Y
                     </button>
                     <button 
-                      onMouseDown={() => moveRobot('z-')} 
-                      onMouseUp={stopRobot}
+                                      onMouseDown={() => startMouseHold('z-')}
+                onMouseUp={stopMouseHold}
                       onMouseLeave={stopRobot}
                       className="tactical-button py-3 px-3 text-base font-bold select-none"
                     >
@@ -1495,19 +1540,25 @@ export default function ControlsPage() {
                 <label className="text-sm text-text-secondary">Quick Examples</label>
                 <div className="flex gap-2 flex-wrap">
                   <button 
-                    onClick={() => setConicalSprayPaths('[{"tilt": 15, "rev": 2, "cycle": 0.015}]')}
+                    onClick={() => setConicalSprayPaths('[{"tilt": 10, "rev": 2, "cycle": 0.015}]')}
                     className="tactical-button py-2 px-3 text-sm"
                   >
                     Single Path
                   </button>
                   <button 
-                    onClick={() => setConicalSprayPaths('[{"tilt": 15, "rev": 4, "cycle": 0.0475}, {"tilt": 10, "rev": 4, "cycle": 0.0475}]')}
+                    onClick={() => setConicalSprayPaths('[{"tilt": 5, "rev": 2, "cycle": 0.015}, {"tilt": 10, "rev": 2, "cycle": 0.015}]')}
                     className="tactical-button py-2 px-3 text-sm"
                   >
                     Dual Path
                   </button>
                   <button 
-                    onClick={() => setConicalSprayPaths('[{"tilt": 15, "rev": 2, "cycle": 0.015}, {"tilt": 10, "rev": 2, "cycle": 0.015}, {"tilt": 15, "rev": 2, "cycle": 0.0475}, {"tilt": 10, "rev": 2, "cycle": 0.0475}]')}
+                    onClick={() => setConicalSprayPaths('[{"tilt": 3, "rev": 2, "cycle": 0.015}, {"tilt": 5, "rev": 2, "cycle": 0.015}, {"tilt": 8, "rev": 2, "cycle": 0.015}')}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Tri Path
+                  </button>
+                  <button 
+                    onClick={() => setConicalSprayPaths('[{"tilt": 3, "rev": 2, "cycle": 0.015}, {"tilt": 5, "rev": 2, "cycle": 0.015}, {"tilt": 8, "rev": 2, "cycle": 0.015}, {"tilt": 10, "rev": 2, "cycle": 0.015}]')}
                     className="tactical-button py-2 px-3 text-sm"
                   >
                     Quad Path

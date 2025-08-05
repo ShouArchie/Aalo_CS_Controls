@@ -44,7 +44,7 @@ class UnifiedRobotController:
         self.robot_controller = None
         self.thermal_detector = None
         self.spacemouse_controller = None
-        self.robot_ip = "192.168.10.255"
+        self.robot_ip = "192.168.10.205"
         self.connected = False
         self.thermal_tracking_active = False
         self.thermal_tracking_thread = None
@@ -700,7 +700,7 @@ blended_spray()
                     revolutions=revolutions,
                     steps=steps,
                     cycle_s=cycle_s,
-                    lookahead_time=0.02,
+                    lookahead_time=0.01,
                     gain=1500,  
                     sing_tol_deg=0.5
                 )
@@ -710,7 +710,7 @@ blended_spray()
                 rf.wait_until_idle(self.robot_controller.robot)
                 
                 print(f"   ✓ Sweep {i} completed")
-            rf.rotate_tcp(self.robot_controller.robot, ry_deg=-tilt, acc=0.1, vel=0.1)
+            rf.rotate_tcp(self.robot_controller.robot, ry_deg=-tilt, acc=1.5, vel=1)
             # rf.translate_tcp(self.robot_controller.robot, dy_mm= -50, acc=1, vel=1)
             return {
                 "success": True,
