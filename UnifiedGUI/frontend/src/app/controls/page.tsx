@@ -31,7 +31,7 @@ export default function ControlsPage() {
   
   // TCP configuration
   const [selectedTcp, setSelectedTcp] = useState(1);
-  const [customTcp, setCustomTcp] = useState([0, 0, 0, 0, 0, 0]); // [x, y, z, rx, ry, rz]
+  const [customTcp, setCustomTcp] = useState([-278.81, 0, 60.3, 0, 0, 0]); // [x, y, z, rx, ry, rz]
   
   // Global speed control
   const [globalSpeedPercent, setGlobalSpeedPercent] = useState(100);  // 0-100%
@@ -94,9 +94,9 @@ export default function ControlsPage() {
 
   // TCP Presets
   const TCP_PRESETS: Record<number, { name: string; offset: number[] }> = {
-    1: { name: "Primary TCP", offset: [-278.81, 0.0, 60.3, 0.0, 0.0, 0.0] },
-    2: { name: "Secondary TCP (Temporary)", offset: [-278.81, 0.0, 60.3, 0.0, 0.0, 0.0] },
-    3: { name: "Tertiary TCP (Temporary)", offset: [-278.81, 0.0, 60.3, 0.0, 0.0, 0.0] },
+    1: { name: "TCP Offset + 20mm", offset: [-278.81, 0.0, 60.3, 0.0, 0.0, 0.0] },
+    2: { name: "TCP Center of Pipe + 20mm", offset: [-362.9475, 0.0, 60.3, 0.0, 0.0, 0.0] },
+    3: { name: "TCP Offset + 0mm", offset: [-258.81, 0.0, 60.3, 0.0, 0.0, 0.0] },
     4: { name: "No TCP (Base)", offset: [0, 0, 0, 0, 0, 0] },
     5: { name: "Custom TCP", offset: customTcp }
   };
@@ -126,7 +126,9 @@ export default function ControlsPage() {
     router.push(path);
   };
 
-  // Handle speedL movement (WASD/QE) - start/stop continuous movement
+  // Handle speedL movement (WASD/QE) - continuous sending while held
+  const speedLIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   useEffect(() => {
     const speedLKeys = ['w', 's', 'a', 'd', 'q', 'e'];
     const currentSpeedLKeys = new Set([...pressedKeys].filter(key => speedLKeys.includes(key)));
@@ -140,39 +142,65 @@ export default function ControlsPage() {
                        !currentArray.every((key, index) => key === activeArray[index]);
     
     if (keysChanged) {
+      // Clear any existing interval
+      if (speedLIntervalRef.current) {
+        clearInterval(speedLIntervalRef.current);
+        speedLIntervalRef.current = null;
+      }
+      
       if (currentSpeedLKeys.size === 0) {
-        // No speedL keys pressed, stop movement
+        // No speedL keys pressed, send stop command
         if (activeSpeedLKeys.size > 0) {
+          console.log('🛑 Stopping continuous speedL movement');
           stopRobot();
         }
       } else if (robotConnected) {
-        // Start speedL movement for the primary key (prioritize first pressed)
+        // Start continuous speedL movement for the primary key
         const primaryKey = [...currentSpeedLKeys][0];
-        switch (primaryKey) {
-          case 'w':
-            moveRobot('z+', 0.5); // Use larger distance for speedL
-            break;
-          case 's':
-            moveRobot('z-', 0.5);
-            break;
-          case 'a':
-            moveRobot('y-', 0.5);
-            break;
-          case 'd':
-            moveRobot('y+', 0.5);
-            break;
-          case 'q':
-            moveRobot('x+', 0.5);
-            break;
-          case 'e':
-            moveRobot('x-', 0.5);
-            break;
-        }
+        console.log(`🚀 Starting continuous speedL: ${primaryKey}`);
+        
+        const sendSpeedLCommand = () => {
+          switch (primaryKey) {
+            case 'w':
+              moveRobot('z+', 0.1);
+              break;
+            case 's':
+              moveRobot('z-', 0.1);
+              break;
+            case 'a':
+              moveRobot('y-', 0.1);
+              break;
+            case 'd':
+              moveRobot('y+', 0.1);
+              break;
+            case 'q':
+              moveRobot('x+', 0.1);
+              break;
+            case 'e':
+              moveRobot('x-', 0.1);
+              break;
+          }
+        };
+        
+        // Send initial command immediately
+        sendSpeedLCommand();
+        
+        // Set up interval to continuously send speedL commands
+        speedLIntervalRef.current = setInterval(sendSpeedLCommand, 150); // Send every 150ms
       }
       
       setActiveSpeedLKeys(currentSpeedLKeys);
     }
-  }, [pressedKeys, robotConnected]); // Removed activeSpeedLKeys from dependencies
+  }, [pressedKeys, robotConnected]);
+  
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (speedLIntervalRef.current) {
+        clearInterval(speedLIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Handle discrete fine movements (IJKL, UO, RFGTYH) - using ref to avoid infinite loops
   const processedKeysRef = useRef<Set<string>>(new Set());
@@ -249,6 +277,12 @@ export default function ControlsPage() {
       if (event.key === 'F1') {
         event.preventDefault();
         setShowSettings(true);
+      }
+      // Spacebar for Emergency Stop (works even when not connected or typing)
+      else if (event.key === ' ') {
+        event.preventDefault();
+        console.log('🚨 Emergency Stop triggered by SPACEBAR');
+        stopRobot();
       }
       // WASD robot movement (only when robot is connected and not typing in input)
       else if (robotConnected && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
@@ -386,6 +420,9 @@ export default function ControlsPage() {
       });
       if (!response.ok) {
         console.error('Failed to move robot');
+      } else {
+        // Update position after movement
+        setTimeout(updateTcpPosition, 200);
       }
     } catch (error) {
       console.error('Failed to move robot:', error);
@@ -435,6 +472,9 @@ export default function ControlsPage() {
       });
       if (!response.ok) {
         console.error('Failed to move robot fine');
+      } else {
+        // Update position after fine movement
+        setTimeout(updateTcpPosition, 200);
       }
     } catch (error) {
       console.error('Failed to move robot fine:', error);
@@ -460,11 +500,61 @@ export default function ControlsPage() {
       });
       if (!response.ok) {
         console.error('Failed to move robot rotation');
+      } else {
+        // Update position after rotation
+        setTimeout(updateTcpPosition, 200);
       }
     } catch (error) {
       console.error('Failed to move robot rotation:', error);
     }
   };
+
+  const updateTcpPosition = async () => {
+    try {
+      if (!robotConnected) {
+        setRobotPosition('DISCONNECTED');
+        return;
+      }
+
+      const response = await fetch('http://localhost:8000/api/robot/tcp-position');
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          const [x, y, z] = result.position_mm.map((val: number) => val.toFixed(1));
+          const [rx, ry, rz] = result.rotation_deg.map((val: number) => val.toFixed(1));
+          setRobotPosition(`${x},${y},${z} | ${rx}°,${ry}°,${rz}°`);
+        } else {
+          setRobotPosition('ERROR');
+        }
+      } else {
+        setRobotPosition('FETCH_ERROR');
+      }
+    } catch (error) {
+      console.error('Failed to get TCP position:', error);
+      setRobotPosition('UNKNOWN');
+    }
+  };
+
+  // TCP Position polling - placed after updateTcpPosition function definition
+  useEffect(() => {
+    let positionInterval: NodeJS.Timeout;
+    
+    if (robotConnected) {
+      // Update position immediately when connected
+      updateTcpPosition();
+      
+      // Set up polling every 2 seconds
+      positionInterval = setInterval(updateTcpPosition, 2000);
+    } else {
+      setRobotPosition('DISCONNECTED');
+    }
+    
+    return () => {
+      if (positionInterval) {
+        clearInterval(positionInterval);
+      }
+    };
+  }, [robotConnected]);
 
   const updateFineStepSize = async (newStepSize: number) => {
     try {
@@ -507,6 +597,9 @@ export default function ControlsPage() {
         const result = await response.json();
         setSelectedTcp(tcpId);
         console.log(`✅ TCP ${tcpId} applied to robot successfully:`, result.message);
+        
+        // Update position immediately after setting TCP
+        setTimeout(updateTcpPosition, 100);
       } else {
         const error = await response.json();
         console.error('Failed to set TCP:', error.error || 'Unknown error');
@@ -701,27 +794,26 @@ export default function ControlsPage() {
             </div>
 
             {/* Robot Status */}
-            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-              <div className="space-y-1">
+            <div className="space-y-2">
+              {/* Status and Thermal Track Row */}
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Status:</span>
                   <span className={robotConnected ? 'text-success' : 'text-warning'}>{robotStatus}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Position:</span>
-                  <span className="text-text-primary">{robotPosition}</span>
-                </div>
-              </div>
-              <div className="space-y-1">
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Thermal Track:</span>
                   <span className={thermalTracking ? 'text-success' : 'text-text-secondary'}>
                     {thermalTracking ? 'ACTIVE' : 'INACTIVE'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Mode:</span>
-                  <span className="text-text-primary">MANUAL</span>
+              </div>
+              
+              {/* TCP Position Row - Full Width */}
+              <div className="bg-surface-dark/30 rounded p-2 border border-accent/20">
+                <div className="flex justify-between items-center">
+                  <span className="text-text-secondary text-sm font-bold">TCP Position:</span>
+                  <span className="text-text-primary text-sm font-mono bg-black/20 px-2 py-1 rounded border">{robotPosition}</span>
                 </div>
               </div>
             </div>
@@ -824,8 +916,9 @@ export default function ControlsPage() {
                   {/* Keyboard Controls Info */}
                   <div className="text-xs text-text-secondary bg-surface-dark/30 p-2 rounded">
                     <span className="text-accent font-bold">⌨️ Responsive Keys:</span><br/>
-                    <span className="text-blue-400">• SpeedL (Continuous):</span> WASD (XYZ), QE (±X)<br/>
-                    <span className="text-green-400">• Fine (Discrete):</span> IJKL (XYZ), UO (±X), RFGTYH (Rotations)
+                    <span className="text-blue-400">• SpeedL (Continuous Stream):</span> WASD (XYZ), QE (±X) - Hold for continuous speedL commands<br/>
+                    <span className="text-green-400">• Fine (Discrete):</span> IJKL (XYZ), UO (±X), RFGTYH (Rotations)<br/>
+                    <span className="text-red-400">• Emergency Stop:</span> SPACEBAR (immediate stop)
                   </div>
                   
                   {/* Active Keys Indicator */}
@@ -972,13 +1065,13 @@ export default function ControlsPage() {
                       </SelectTrigger>
                       <SelectContent className="bg-surface-dark border-accent/30">
                         <SelectItem value="1" className="text-sm text-text-primary hover:bg-accent/20">
-                          1: Primary TCP (-278.81, 0, 60.3)
+                          1: TCP Offset + 20mm (-278.81, 0, 60.3)
                         </SelectItem>
                         <SelectItem value="2" className="text-sm text-text-primary hover:bg-accent/20">
-                          2: Secondary TCP (Temporary)
+                          2: TCP Center of Pipe + 20mm (-362.9475, 0.0, 60.3)
                         </SelectItem>
                         <SelectItem value="3" className="text-sm text-text-primary hover:bg-accent/20">
-                          3: Tertiary TCP (Temporary)
+                          3: TCP Offset + 0mm (-258.81, 0.0, 60.3)
                         </SelectItem>
                         <SelectItem value="4" className="text-sm text-text-primary hover:bg-accent/20">
                           4: No TCP (Base Coordinates)
@@ -994,28 +1087,60 @@ export default function ControlsPage() {
                       <div className="space-y-2">
                         <label className="text-xs text-text-secondary">Custom TCP Offset (X, Y, Z, Rx, Ry, Rz)</label>
                         <div className="grid grid-cols-6 gap-1">
-                          {customTcp.map((value, index) => (
-                            <Input
-                              key={index}
-                              type="number"
-                              value={value}
-                              onChange={(e) => {
-                                const newTcp = [...customTcp];
-                                newTcp[index] = parseFloat(e.target.value) || 0;
-                                setCustomTcp(newTcp);
-                              }}
-                              placeholder={['X', 'Y', 'Z', 'Rx', 'Ry', 'Rz'][index]}
-                              className="text-xs bg-surface-dark border-accent/30 text-text-primary"
-                              step={index < 3 ? "0.1" : "0.01"}
-                            />
-                          ))}
+                          {customTcp.map((value, index) => {
+                            // Convert radians to degrees for display (rotation values)
+                            const displayValue = index >= 3 ? (value * 180 / Math.PI) : value;
+                            
+                            return (
+                              <Input
+                                key={index}
+                                type="number"
+                                value={displayValue}
+                                onChange={(e) => {
+                                  const newTcp = [...customTcp];
+                                  const inputValue = e.target.value;
+                                  if (inputValue === '' || inputValue === '-') {
+                                    // Allow empty input or just minus sign for negative numbers
+                                    newTcp[index] = 0;
+                                  } else {
+                                    let parsedValue = parseFloat(inputValue);
+                                    if (!isNaN(parsedValue)) {
+                                      // Convert degrees to radians for rotation values (indices 3, 4, 5)
+                                      if (index >= 3) {
+                                        parsedValue = parsedValue * Math.PI / 180;
+                                      }
+                                      newTcp[index] = parsedValue;
+                                    } else {
+                                      newTcp[index] = 0;
+                                    }
+                                  }
+                                  setCustomTcp(newTcp);
+                                }}
+                                placeholder={index < 3 ? ['X', 'Y', 'Z'][index] : ['Rx°', 'Ry°', 'Rz°'][index - 3]}
+                                className="text-xs bg-surface-dark border-accent/30 text-text-primary"
+                                step={index < 3 ? "0.1" : "1"}
+                              />
+                            );
+                          })}
                         </div>
-                        <button 
-                          onClick={() => setTcp(5)}
-                          className="tactical-button py-1 px-3 rounded text-xs w-full"
-                        >
-                          Apply Custom TCP
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setCustomTcp([-278.81, 0, 60.3, 0, 0, 0])}
+                            className="tactical-button py-1 px-2 rounded text-xs flex-1"
+                          >
+                            Reset to Primary
+                          </button>
+                          <button 
+                            onClick={() => setTcp(5)}
+                            className="tactical-button py-1 px-2 rounded text-xs flex-1"
+                          >
+                            Apply Custom TCP
+                          </button>
+                        </div>
+                        <div className="text-xs text-text-secondary space-y-1">
+                          <div>Position in mm (negative values allowed), Rotation in degrees (auto-converted to radians)</div>
+                          <div className="text-accent">Common angles: 90° = π/2, 180° = π, -90° = -π/2</div>
+                        </div>
                       </div>
                     )}
                   </div>

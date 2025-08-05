@@ -252,12 +252,12 @@ class UnifiedRobotController:
             
             print(f"🤖 Moving robot {direction} with velocity: {velocity} (speed: {speed_percent}%)")
             
-            # Use URScript speedl command like spacemouse controller
+            # Use URScript speedl command for continuous movement
             # speedl([x, y, z, rx, ry, rz], acceleration, time)
-            # Apply speed multiplier to acceleration as well
+            # Use short duration since frontend sends commands every 150ms
             base_acceleration = 0.5  # Base acceleration
             acceleration = base_acceleration * (speed_percent / 100.0)
-            urscript_cmd = f"speedl([{velocity[0]:.6f}, {velocity[1]:.6f}, {velocity[2]:.6f}, {velocity[3]:.6f}, {velocity[4]:.6f}, {velocity[5]:.6f}], {acceleration:.6f}, 1.0)"
+            urscript_cmd = f"speedl([{velocity[0]:.6f}, {velocity[1]:.6f}, {velocity[2]:.6f}, {velocity[3]:.6f}, {velocity[4]:.6f}, {velocity[5]:.6f}], {acceleration:.6f}, 0.2)"
             self.robot_controller.robot.send_program(urscript_cmd)
             
             print(f"✅ URScript speedl command sent: {urscript_cmd}")
