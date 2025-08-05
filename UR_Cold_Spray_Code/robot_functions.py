@@ -61,6 +61,14 @@ def get_tcp_pose(robot: urx.Robot) -> List[float]:
         raise RuntimeError("Invalid TCP pose from robot")
     return list(map(float, pose))
 
+def get_joint_angles(robot: urx.Robot) -> List[float]:
+    """Get current joint angles [j1, j2, j3, j4, j5, j6]."""
+    angles = robot.getj()
+    if angles is None or len(angles) != 6:
+        raise RuntimeError("Invalid joint angles from robot")
+    return list(map(float, angles))
+
+
 def wait_until_pose(robot: urx.Robot, target: Sequence[float]) -> None:
     """Wait until robot reaches target TCP pose."""
     start = time.time()

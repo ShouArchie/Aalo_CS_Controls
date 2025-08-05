@@ -28,7 +28,7 @@ UnifiedGUI/
     └── next.config.js     # Runtime options
 ```
 
-> **Note** Camera indices are hard-coded in `backend/main.py` as *1 = RGB* and *0 = Thermal* – adjust locally if needed.
+> **Note** The backend includes **robust camera initialization** with 3-retry mechanism across multiple indices (RGB: 1,0,2 | Thermal: HT301 then webcam fallback). If cameras fail after 3 attempts, the system continues without them and other APIs remain functional.
 
 ---
 
@@ -91,7 +91,42 @@ The frontend is now organized into **three distinct pages** for better workflow 
 
 ---
 
-## 3 · Road-map Tasks
+## 3 · System Resilience & Error Handling
+
+### 🔄 **Camera Initialization**
+The backend implements a **robust 3-retry mechanism** for camera initialization:
+
+**RGB Camera Retry Strategy:**
+1. **Attempt 1-3**: Try camera index 1 at 60fps (high priority)
+2. **Fallback 1**: Try camera index 1 at 30fps (high priority)
+3. **Fallback 2**: Try camera index 0 at 30fps (normal priority)
+4. **Fallback 3**: Try camera index 2 at 30fps (normal priority)
+5. **Final State**: If all fail, continue without RGB camera
+
+**Thermal Camera Retry Strategy:**
+1. **Attempt 1-3**: Try HT301 thermal camera at 60fps
+2. **Fallback 1**: Try HT301 thermal camera at 30fps
+3. **Fallback 2**: Try webcam index 2 at 60fps (thermal fallback)
+4. **Fallback 3**: Try webcam index 2 at 30fps (thermal fallback)
+5. **Final State**: If all fail, continue without thermal camera
+
+### ⚡ **Graceful Degradation**
+- **Camera Failures**: WebSocket endpoints gracefully reject connections for failed cameras
+- **Robot Unavailable**: All robot APIs return proper error messages when robot controller is not available
+- **Partial Systems**: Frontend adapts to show only available camera feeds and controls
+- **Status API**: `/api/status` endpoint reports which systems are online
+
+### 🔍 **Startup Monitoring**
+The backend provides a detailed startup summary showing:
+- ✅/❌ RGB Camera status
+- ✅/❌ Thermal Camera status  
+- ✅/❌ Robot Controller status
+- ✅/⚠️ WebSocket API availability
+- ✅/❌ Robot API availability
+
+---
+
+## 4 · Road-map Tasks
 
 | ID | Status | Task |
 |----|--------|------|

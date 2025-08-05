@@ -411,49 +411,117 @@ def _init_rgb() -> CameraStream | None:
     return None
 
 
-# Initialize RGB camera with high priority for smooth video - try 60fps first
-try:
-    rgb_stream = CameraStream(index=1, target_fps=60, priority="high")
-    rgb_stream.start()
-    print(f"✓ RGB camera started at index 1 with 60 FPS high priority")
-except Exception as e:
-    print(f"60 FPS failed for RGB, trying 30 FPS fallback: {e}")
-    rgb_stream = CameraStream(index=1, target_fps=30, priority="high")
-    rgb_stream.start()
-    print(f"✓ RGB camera started at index 1 with 30 FPS fallback")
+# Initialize RGB camera with retry mechanism
+def init_rgb_camera_with_retry(max_attempts=3) -> CameraStream | None:
+    """Initialize RGB camera with retry mechanism."""
+    print(f"🔄 Attempting to initialize RGB camera (max {max_attempts} attempts)...")
+    
+    # Try different indices and frame rates
+    configs = [
+        (1, 60, "high"),  # Preferred: index 1, 60fps, high priority
+        (1, 30, "high"),  # Fallback: index 1, 30fps, high priority
+        (0, 30, "normal"), # Fallback: index 0, 30fps, normal priority
+        (2, 30, "normal"), # Fallback: index 2, 30fps, normal priority
+    ]
+    
+    for attempt in range(max_attempts):
+        print(f"🔄 RGB camera attempt {attempt + 1}/{max_attempts}")
+        
+        for idx, fps, priority in configs:
+            try:
+                print(f"  Trying RGB camera: index={idx}, fps={fps}, priority={priority}")
+                rgb_stream = CameraStream(index=idx, target_fps=fps, priority=priority)
+                rgb_stream.start()
+                print(f"✅ RGB camera started: index={idx}, fps={fps}, priority={priority}")
+                return rgb_stream
+            except Exception as e:
+                print(f"  ❌ RGB camera failed: index={idx}, fps={fps} - {e}")
+        
+        if attempt < max_attempts - 1:
+            print(f"  🔄 Retrying RGB camera in 1 second...")
+            time.sleep(1)
+    
+    print("❌ RGB camera initialization failed after all attempts")
+    return None
 
-# Thermal stream (HT301 preferred) with high priority - try 60fps first
-thermal_stream: HT301Stream | CameraStream
+rgb_stream = init_rgb_camera_with_retry(max_attempts=3)
 
-try:
-    thermal_stream = HT301Stream(target_fps=60)  # Try 60 FPS for thermal
-    thermal_stream.start()
-    print("✓ HT301 thermal camera started with 60 FPS high priority")
-except Exception as e:
-    print(f"HT301 60 FPS failed, trying 30 FPS: {e}")
-    try:
-        thermal_stream = HT301Stream(target_fps=30)
-        thermal_stream.start()
-        print("✓ HT301 thermal camera started with 30 FPS fallback")
-    except Exception as e2:
-        print(f"HT301 init error: {e2}. Falling back to webcam index 2.")
-        thermal_stream = RawThermalStream(index=2, target_fps=60)
-        try:
-            thermal_stream.start()
-            print("✓ Fallback thermal camera started with 60 FPS")
-        except Exception as e3:
-            print(f"60 FPS fallback failed, using 30 FPS: {e3}")
-            thermal_stream = RawThermalStream(index=2, target_fps=30)
-            thermal_stream.start()
-            print("✓ Fallback thermal camera started with 30 FPS")
+# Initialize thermal camera with retry mechanism  
+def init_thermal_camera_with_retry(max_attempts=3) -> HT301Stream | CameraStream | None:
+    """Initialize thermal camera with retry mechanism."""
+    print(f"🔄 Attempting to initialize thermal camera (max {max_attempts} attempts)...")
+    
+    # Try different configurations
+    configs = [
+        ("HT301", 60),    # Preferred: HT301 at 60fps
+        ("HT301", 30),    # Fallback: HT301 at 30fps 
+        ("webcam", 60),   # Fallback: webcam index 2 at 60fps
+        ("webcam", 30),   # Fallback: webcam index 2 at 30fps
+    ]
+    
+    for attempt in range(max_attempts):
+        print(f"🔄 Thermal camera attempt {attempt + 1}/{max_attempts}")
+        
+        for cam_type, fps in configs:
+            try:
+                if cam_type == "HT301":
+                    print(f"  Trying HT301 thermal camera: fps={fps}")
+                    thermal_stream = HT301Stream(target_fps=fps)
+                    thermal_stream.start()
+                    print(f"✅ HT301 thermal camera started: fps={fps}")
+                    return thermal_stream
+                else:  # webcam fallback
+                    print(f"  Trying webcam thermal fallback: index=2, fps={fps}")
+                    thermal_stream = RawThermalStream(index=2, target_fps=fps)
+                    thermal_stream.start()
+                    print(f"✅ Webcam thermal fallback started: index=2, fps={fps}")
+                    return thermal_stream
+            except Exception as e:
+                print(f"  ❌ Thermal camera failed: {cam_type}, fps={fps} - {e}")
+        
+        if attempt < max_attempts - 1:
+            print(f"  🔄 Retrying thermal camera in 1 second...")
+            time.sleep(1)
+    
+    print("❌ Thermal camera initialization failed after all attempts")
+    return None
+
+thermal_stream = init_thermal_camera_with_retry(max_attempts=3)
 
 # Start streams ensured above; collect running list for shutdown
 running_streams = [s for s in (rgb_stream, thermal_stream) if s]
+
+# Print startup summary
+print("\n" + "="*60)
+print("🚀 UNIFIED GUI BACKEND STARTUP SUMMARY")
+print("="*60)
+print(f"📹 RGB Camera:      {'✅ Available' if rgb_stream else '❌ Failed (3 attempts)'}")
+print(f"🌡️  Thermal Camera:  {'✅ Available' if thermal_stream else '❌ Failed (3 attempts)'}")
+print(f"🤖 Robot Controller: {'✅ Available' if robot_controller else '❌ Not Available'}")
+print(f"🌐 WebSocket APIs:   {'✅ Active' if running_streams else '⚠️  Limited (no cameras)'}")
+print(f"🎮 Robot APIs:       {'✅ Active' if robot_controller else '❌ Disabled'}")
+print("="*60)
+if not rgb_stream and not thermal_stream:
+    print("⚠️  WARNING: No cameras available - camera views will not work")
+if not robot_controller:
+    print("⚠️  WARNING: Robot controller not available - robot controls disabled")
+print("✅ Backend ready - cameras that failed will be ignored")
+print("="*60 + "\n")
 
 
 @app.get("/")
 async def root():
     return {"status": "ok"}
+
+@app.get("/api/status")
+async def get_system_status():
+    """Get the status of all system components."""
+    return {
+        "rgb_camera": rgb_stream is not None,
+        "thermal_camera": thermal_stream is not None,
+        "robot_controller": robot_controller is not None,
+        "backend_ready": True
+    }
 
 
 async def _frame_sender(websocket: WebSocket, stream: CameraStream | HT301Stream):
@@ -492,11 +560,21 @@ async def _frame_sender(websocket: WebSocket, stream: CameraStream | HT301Stream
 
 @app.websocket("/ws/rgb")
 async def ws_rgb(websocket: WebSocket):
+    if rgb_stream is None:
+        await websocket.accept()
+        await websocket.close(code=1000, reason="RGB camera not available")
+        print("❌ RGB WebSocket rejected - camera not initialized")
+        return
     await _frame_sender(websocket, rgb_stream)
 
 
-@app.websocket("/ws/thermal")
+@app.websocket("/ws/thermal") 
 async def ws_thermal(websocket: WebSocket):
+    if thermal_stream is None:
+        await websocket.accept()
+        await websocket.close(code=1000, reason="Thermal camera not available")
+        print("❌ Thermal WebSocket rejected - camera not initialized")
+        return
     await _frame_sender(websocket, thermal_stream)
 
 
@@ -727,6 +805,15 @@ async def get_robot_tcp():
         return {"success": False, "error": "Robot controller not available"}
     
     result = robot_controller.get_current_tcp()
+    return result
+
+@app.get("/api/robot/tcp-position")
+async def get_tcp_position():
+    """Get the current TCP position and orientation."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.get_tcp_position()
     return result
 
 @app.post("/api/robot/cold-spray")

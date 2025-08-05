@@ -683,9 +683,10 @@ blended_spray()
                 return {"success": False, "error": "robot_functions module not available"}
             
             print(f"🌀 Executing {len(spray_paths)} conical spray path(s)")
-            
+            tilt = 0
             for i, path in enumerate(spray_paths, 1):
                 tilt_deg = path['tilt']
+                tilt = tilt_deg
                 revolutions = path['rev'] 
                 cycle_s = path['cycle']
                 steps = int(180 * revolutions)  # Always 180 steps per revolution
@@ -699,9 +700,9 @@ blended_spray()
                     revolutions=revolutions,
                     steps=steps,
                     cycle_s=cycle_s,
-                    lookahead_time=0.2,
-                    gain=1500,  # Match spray_test_V2 gain
-                    sing_tol_deg=1
+                    lookahead_time=0.02,
+                    gain=1500,  
+                    sing_tol_deg=0.5
                 )
                 
                 # Wait for completion like in spray_test_V2
@@ -709,7 +710,8 @@ blended_spray()
                 rf.wait_until_idle(self.robot_controller.robot)
                 
                 print(f"   ✓ Sweep {i} completed")
-            rf.translate_tcp(self.robot_controller.robot, dy_mm= -50, acc=1, vel=1)
+            rf.rotate_tcp(self.robot_controller.robot, ry_deg=-tilt, acc=0.1, vel=0.1)
+            # rf.translate_tcp(self.robot_controller.robot, dy_mm= -50, acc=1, vel=1)
             return {
                 "success": True,
                 "message": f"Executed {len(spray_paths)} conical spray path(s) successfully",
@@ -757,6 +759,34 @@ blended_spray()
                 "thermal_tracking": False,
                 "spacemouse_connected": False
             }
+    
+    def get_tcp_position(self) -> dict:
+        """Get the current TCP position and orientation"""
+        try:
+            if not self.connected or not self.robot_controller:
+                return {"success": False, "error": "Robot not connected"}
+            
+            # Get current TCP pose from robot
+            tcp_pose = self.robot_controller.robot.getl()
+            x, y, z, rx, ry, rz = tcp_pose
+            
+            # Convert position from meters to mm for display
+            position_mm = [x * 1000, y * 1000, z * 1000]
+            
+            # Convert rotations from radians to degrees
+            import math
+            rotation_deg = [math.degrees(rx), math.degrees(ry), math.degrees(rz)]
+            
+            return {
+                "success": True,
+                "position_mm": position_mm,  # [X, Y, Z] in mm
+                "rotation_deg": rotation_deg,  # [Rx, Ry, Rz] in degrees
+                "raw_pose": tcp_pose  # Original pose in meters/radians
+            }
+            
+        except Exception as e:
+            print(f"❌ TCP position error: {e}")
+            return {"success": False, "error": str(e)}
 
 
 # Global robot controller instance
