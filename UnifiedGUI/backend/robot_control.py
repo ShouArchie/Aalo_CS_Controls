@@ -69,7 +69,6 @@ class UnifiedRobotController:
             self.robot_ip = ip
             self.robot_controller = RobotController()
             
-            # Connect directly with IP instead of using config
             print(f"Connecting to robot at {ip}...")
             import urx
             try:
@@ -82,14 +81,10 @@ class UnifiedRobotController:
             if success:
                 self.connected = True
                 
-                # Initialize thermal detector
                 if ThermalDetector:
                     self.thermal_detector = ThermalDetector()
-                
-                # Initialize spacemouse controller
                 if SpaceMouseController:
                     self.spacemouse_controller = SpaceMouseController(self.robot_controller)
-                    # Try to connect spacemouse (non-blocking)
                     try:
                         self.spacemouse_controller.connect_spacemouse()
                     except Exception as e:
@@ -252,12 +247,9 @@ class UnifiedRobotController:
             
             print(f"🤖 Moving robot {direction} with velocity: {velocity} (speed: {speed_percent}%)")
             
-            # Use URScript speedl command for continuous movement
-            # speedl([x, y, z, rx, ry, rz], acceleration, time)
-            # Use short duration since frontend sends commands every 150ms
             base_acceleration = 0.5  # Base acceleration
             acceleration = base_acceleration * (speed_percent / 100.0)
-            urscript_cmd = f"speedl([{velocity[0]:.6f}, {velocity[1]:.6f}, {velocity[2]:.6f}, {velocity[3]:.6f}, {velocity[4]:.6f}, {velocity[5]:.6f}], {acceleration:.6f}, 0.2)"
+            urscript_cmd = f"speedl([{velocity[0]:.6f}, {velocity[1]:.6f}, {velocity[2]:.6f}, {velocity[3]:.6f}, {velocity[4]:.6f}, {velocity[5]:.6f}], {acceleration:.6f}, 0)"
             self.robot_controller.robot.send_program(urscript_cmd)
             
             print(f"✅ URScript speedl command sent: {urscript_cmd}")
@@ -456,8 +448,6 @@ class UnifiedRobotController:
             
             print(f"🔧 Setting TCP {tcp_id} ({tcp_name}): [{', '.join(f'{v:.3f}' for v in tcp_offset)}]")
             
-            # Send URScript set_tcp command
-            # TCP offset format: [x_mm, y_mm, z_mm, rx_rad, ry_rad, rz_rad]
             # Convert position from mm to m for URScript
             tcp_m = [
                 tcp_offset[0] / 1000.0,  # X mm to m
