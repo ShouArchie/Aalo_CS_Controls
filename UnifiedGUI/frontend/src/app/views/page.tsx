@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_ENDPOINTS, WS_ENDPOINTS } from '@/lib/config';
 
 export default function ViewsPage() {
   const router = useRouter();
@@ -72,7 +73,7 @@ export default function ViewsPage() {
 
   const toggleTemperatureFilter = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/thermal/filter/toggle', {
+      const response = await fetch(API_ENDPOINTS.THERMAL_FILTER_TOGGLE, {
         method: 'POST'
       });
       const data = await response.json();
@@ -101,7 +102,7 @@ export default function ViewsPage() {
 
   const updateTemperatureRange = async (min: number, max: number) => {
     try {
-      const response = await fetch('http://localhost:8000/api/thermal/filter/range', {
+      const response = await fetch(API_ENDPOINTS.THERMAL_FILTER_RANGE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ min_temp: min, max_temp: max })
@@ -118,7 +119,7 @@ export default function ViewsPage() {
 
   const cycleColorPalette = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/thermal/palette/cycle', {
+      const response = await fetch(API_ENDPOINTS.THERMAL_PALETTE_CYCLE, {
         method: 'POST'
       });
       const data = await response.json();
@@ -131,7 +132,7 @@ export default function ViewsPage() {
 
   const manualCalibration = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/thermal/calibrate', {
+      const response = await fetch(API_ENDPOINTS.THERMAL_CALIBRATE, {
         method: 'POST'
       });
       const data = await response.json();
@@ -142,7 +143,7 @@ export default function ViewsPage() {
   };
 
   return (
-    <main className="min-h-screen relative overflow-hidden">
+    <main className="min-h-screen relative">
       {/* Background Grid */}
       <div className="hud-grid absolute inset-0 opacity-30"></div>
       
@@ -199,91 +200,91 @@ export default function ViewsPage() {
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="p-2 h-[calc(100vh-80px)]">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
-          {/* Camera Feeds - Left Two Thirds */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* RGB Camera - Larger */}
-            <div className="bg-black rounded p-4 h-[45%]">
-              <CameraPanel title="RGB Camera" wsUrl={`${wsBase}/ws/rgb`} />
-            </div>
+      {/* Main Content - Full Screen Layout */}
+      <div className="p-2">
+        {/* Camera Feeds - Side by Side - Take up most of screen */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100vh-80px)] mb-6">
+          {/* RGB Camera - Full Height */}
+          <div className="bg-black rounded p-1 h-full">
+            <CameraPanel title="RGB Camera" wsUrl={`${wsBase}/ws/rgb`} />
+          </div>
 
-            {/* Thermal Camera - Larger */}
-            <div className="bg-black rounded p-4 h-[45%]">
-              <CameraPanel 
-                title="Thermal Camera" 
-                wsUrl={`${wsBase}/ws/thermal`} 
-                isThermal={true}
-                filterEnabled={filterEnabled}
-                tempRange={tempRange}
-                colorPalette={colorPalette}
-              />
+          {/* Thermal Camera - Full Height */}
+          <div className="bg-black rounded p-1 h-full">
+            <CameraPanel 
+              title="Thermal Camera" 
+              wsUrl={`${wsBase}/ws/thermal`} 
+              isThermal={true}
+              filterEnabled={filterEnabled}
+              tempRange={tempRange}
+              colorPalette={colorPalette}
+            />
+          </div>
+        </div>
+
+        {/* Controls Section - Below Cameras */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-6">
+
+          {/* System Status */}
+          <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="status-indicator bg-success"></div>
+              <h3 className="text-sm font-tactical text-accent font-medium">System Status</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-3 text-xs font-mono">
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-text-secondary">CPU:</span>
+                  <span className="text-success">23%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-secondary">Memory:</span>
+                  <span className="text-success">1.2GB</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-secondary">Network:</span>
+                  <span className="text-success">ACTIVE</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-secondary">Uptime:</span>
+                  <span className="text-text-primary">2h 14m</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Control Panels - Right Third */}
-          <div className="space-y-4 h-full overflow-y-auto">
-            {/* System Status */}
-            <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-4 space-y-3">
+          {/* Thermal Controls - Second Column */}
+          <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-4 space-y-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="status-indicator bg-success"></div>
-                <h3 className="text-sm font-tactical text-accent font-medium">System Status</h3>
+                <div className="status-indicator bg-warning"></div>
+                <h3 className="text-sm font-tactical text-accent font-medium">Thermal Controls</h3>
               </div>
-              <div className="grid grid-cols-1 gap-3 text-xs font-mono">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">CPU:</span>
-                    <span className="text-success">23%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Memory:</span>
-                    <span className="text-success">1.2GB</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Network:</span>
-                    <span className="text-success">ACTIVE</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Uptime:</span>
-                    <span className="text-text-primary">2h 14m</span>
-                  </div>
-                </div>
-              </div>
+              <button
+                onClick={() => setThermalControlsCollapsed(!thermalControlsCollapsed)}
+                className="tactical-button p-1 text-xs"
+                title={thermalControlsCollapsed ? "Expand" : "Collapse"}
+              >
+                {thermalControlsCollapsed ? "▼" : "▲"}
+              </button>
             </div>
-
-            {/* Thermal Controls - Expanded */}
-            <div className="bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-4 space-y-4 flex-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="status-indicator bg-warning"></div>
-                  <h3 className="text-sm font-tactical text-accent font-medium">Thermal Controls</h3>
-                </div>
-                <button
-                  onClick={() => setThermalControlsCollapsed(!thermalControlsCollapsed)}
-                  className="tactical-button p-1 text-xs"
-                  title={thermalControlsCollapsed ? "Expand" : "Collapse"}
-                >
-                  {thermalControlsCollapsed ? "▼" : "▲"}
-                </button>
-              </div>
-              
-              {!thermalControlsCollapsed && (
-                <>
-                  {/* Temperature Filter Toggle */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-text-secondary">Temperature Filter</span>
-                      <kbd className="px-1 py-0.5 text-xs bg-surface-dark border border-accent/30 rounded">Alt+F</kbd>
-                    </div>
-                    <Switch 
-                      checked={filterEnabled}
-                      onCheckedChange={(checked) => {
-                        setFilterEnabled(checked);
-                        toggleTemperatureFilter();
-                      }}
-                    />
+            
+            {!thermalControlsCollapsed && (
+              <>
+                {/* Temperature Filter Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-text-secondary">Temperature Filter</span>
+                    <kbd className="px-1 py-0.5 text-xs bg-surface-dark border border-accent/30 rounded">Alt+F</kbd>
                   </div>
+                  <Switch 
+                    checked={filterEnabled}
+                    onCheckedChange={(checked) => {
+                      setFilterEnabled(checked);
+                      toggleTemperatureFilter();
+                    }}
+                  />
+                </div>
 
                   {/* Temperature Range Sliders */}
                   <div className="space-y-4 p-3 bg-surface-medium rounded border border-accent/20">
@@ -296,11 +297,13 @@ export default function ViewsPage() {
                         <Slider
                           value={[tempRange.min]}
                           onValueChange={([value]) => {
-                            const newRange = { ...tempRange, min: value };
+                            // Ensure min doesn't exceed max
+                            const clampedMin = Math.min(value, tempRange.max - 1);
+                            const newRange = { ...tempRange, min: clampedMin };
                             setTempRange(newRange);
-                            updateTemperatureRange(value, tempRange.max);
+                            updateTemperatureRange(clampedMin, tempRange.max);
                           }}
-                          max={tempRange.max - 1}
+                          max={99}
                           min={-20}
                           step={1}
                           className="w-full slider-enhanced"
@@ -313,12 +316,14 @@ export default function ViewsPage() {
                         <Slider
                           value={[tempRange.max]}
                           onValueChange={([value]) => {
-                            const newRange = { ...tempRange, max: value };
+                            // Ensure max doesn't go below min
+                            const clampedMax = Math.max(value, tempRange.min + 1);
+                            const newRange = { ...tempRange, max: clampedMax };
                             setTempRange(newRange);
-                            updateTemperatureRange(tempRange.min, value);
+                            updateTemperatureRange(tempRange.min, clampedMax);
                           }}
                           max={100}
-                          min={tempRange.min + 1}
+                          min={-19}
                           step={1}
                           className="w-full slider-enhanced"
                         />
@@ -367,9 +372,8 @@ export default function ViewsPage() {
                       CONFIG
                     </button>
                   </div>
-                </>
-              )}
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>

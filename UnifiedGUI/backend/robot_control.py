@@ -700,8 +700,8 @@ blended_spray()
                     revolutions=revolutions,
                     steps=steps,
                     cycle_s=cycle_s,
-                    lookahead_time=0.01,
-                    gain=1500,  
+                    lookahead_time=0.1,
+                    gain=1800,  
                     sing_tol_deg=0.5
                 )
                 

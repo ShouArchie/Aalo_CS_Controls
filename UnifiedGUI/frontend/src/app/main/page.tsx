@@ -102,7 +102,7 @@ export default function MainDashboard() {
 
   const cycleColorPalette = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/thermal/palette/cycle', {
+      const response = await fetch(API_ENDPOINTS.THERMAL_PALETTE_CYCLE, {
         method: 'POST'
       });
       const data = await response.json();

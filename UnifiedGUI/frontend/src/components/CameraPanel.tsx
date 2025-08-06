@@ -1,5 +1,6 @@
 import { useCameraStream } from '@components/useCameraStream';
 import { useState, useCallback, useEffect } from 'react';
+import { API_ENDPOINTS } from '@/lib/config';
 
 interface Props {
   title: string;
@@ -39,7 +40,7 @@ export default function CameraPanel({
     const y = Math.floor((event.clientY - rect.top) * (canvas.height / rect.height));
     
     try {
-      const response = await fetch(`http://localhost:8000/api/temperature/${x}/${y}`);
+              const response = await fetch(API_ENDPOINTS.TEMPERATURE_AT(x, y));
       const data = await response.json();
       if (data.temperature) {
         setTempData(prev => ({ ...prev, temperature: data.temperature, x, y }));
@@ -55,7 +56,7 @@ export default function CameraPanel({
     
     const interval = setInterval(async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/thermal/minmax');
+        const response = await fetch(API_ENDPOINTS.THERMAL_MINMAX);
         const data = await response.json();
         if (data.min_temp !== undefined) {
           setTempData(prev => ({ ...prev, ...data }));
@@ -69,9 +70,9 @@ export default function CameraPanel({
   }, [isThermal]);
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className={`status-indicator ${isThermal ? 'bg-warning' : 'bg-success'}`}></div>
           <h2 className="text-sm font-tactical font-bold text-accent uppercase tracking-wider">
@@ -83,13 +84,13 @@ export default function CameraPanel({
         </div>
       </div>
 
-      {/* Camera Display */}
-      <div className="relative bg-surface-dark rounded overflow-hidden">
+      {/* Camera Display - Takes remaining space */}
+      <div className="relative bg-surface-dark rounded overflow-hidden flex-1">
         <canvas 
           ref={canvasRef} 
-          className={`w-full ${isThermal ? 'cursor-crosshair' : ''} block`}
+          className={`w-full h-full ${isThermal ? 'cursor-crosshair' : ''} block`}
           onClick={handleCanvasClick}
-          style={{ aspectRatio: '4/3', height: 'calc((100vh - 160px) / 2.2)', objectFit: 'contain' }}
+          style={{ objectFit: 'contain' }}
         />
         
 

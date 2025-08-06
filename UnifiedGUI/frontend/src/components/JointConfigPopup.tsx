@@ -18,26 +18,54 @@ export default function JointConfigPopup({
   onUpdate, 
   onSave 
 }: JointConfigPopupProps) {
-  const [localJoints, setLocalJoints] = useState(homeJoints);
+  // Store as strings to allow empty values during editing
+  const [localJoints, setLocalJoints] = useState(homeJoints.map(j => j.toString()));
+
+  // Sync local joints when popup opens with new homeJoints values
+  if (isOpen && localJoints.length !== homeJoints.length) {
+    setLocalJoints(homeJoints.map(j => j.toString()));
+  }
 
   if (!isOpen) return null;
 
+  // Validation: check if all joints are valid numbers
+  const areAllJointsValid = () => {
+    return localJoints.every(joint => {
+      const trimmed = joint.trim();
+      return trimmed !== '' && !isNaN(parseFloat(trimmed));
+    });
+  };
+
   const handleJointChange = (index: number, value: string) => {
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue)) {
-      const newJoints = [...localJoints];
-      newJoints[index] = numValue;
-      setLocalJoints(newJoints);
-      onUpdate(newJoints);
+    // Allow empty values and any input during editing
+    const newJoints = [...localJoints];
+    newJoints[index] = value;
+    setLocalJoints(newJoints);
+    
+    // Only update parent if all values are valid numbers
+    const allValid = newJoints.every(joint => {
+      const trimmed = joint.trim();
+      return trimmed !== '' && !isNaN(parseFloat(trimmed));
+    });
+    
+    if (allValid) {
+      const numericJoints = newJoints.map(j => parseFloat(j.trim()));
+      onUpdate(numericJoints);
     }
   };
 
   const handleSave = () => {
-    onSave();
+    if (areAllJointsValid()) {
+      // Update parent with final numeric values before saving
+      const numericJoints = localJoints.map(j => parseFloat(j.trim()));
+      onUpdate(numericJoints);
+      onSave();
+      onClose();
+    }
   };
 
   const handleCancel = () => {
-    setLocalJoints(homeJoints); // Reset to original values
+    setLocalJoints(homeJoints.map(j => j.toString())); // Reset to original values as strings
     onUpdate(homeJoints);
     onClose();
   };
@@ -76,10 +104,14 @@ export default function JointConfigPopup({
                   </label>
                   <Input
                     type="number"
-                    value={joint.toFixed(2)}
+                    value={joint}
                     onChange={(e) => handleJointChange(index, e.target.value)}
                     step="0.01"
-                    className="text-xs bg-surface-dark border-accent/30 text-text-primary"
+                    className={`text-xs bg-surface-dark border-accent/30 text-text-primary ${
+                      joint.trim() === '' || isNaN(parseFloat(joint.trim())) 
+                        ? 'border-red-500/50 bg-red-900/20' 
+                        : ''
+                    }`}
                     placeholder={`J${index + 1}`}
                   />
                 </div>
@@ -92,11 +124,24 @@ export default function JointConfigPopup({
               <div className="grid grid-cols-3 gap-2 text-xs font-mono">
                 {localJoints.map((joint, index) => (
                   <div key={index} className="text-text-secondary">
-                    J{index + 1}: {joint.toFixed(2)}°
+                    J{index + 1}: {
+                      joint.trim() === '' || isNaN(parseFloat(joint.trim())) 
+                        ? '---' 
+                        : parseFloat(joint.trim()).toFixed(2)
+                    }°
                   </div>
                 ))}
               </div>
             </div>
+
+            {/* Validation message */}
+            {!areAllJointsValid() && (
+              <div className="bg-red-900/20 border border-red-500/30 p-2 rounded">
+                <p className="text-xs text-red-400">
+                  ❌ All joint fields must be filled with valid numbers to save.
+                </p>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex gap-3">
@@ -108,7 +153,12 @@ export default function JointConfigPopup({
               </button>
               <button 
                 onClick={handleSave}
-                className="flex-1 tactical-button py-2 px-4 rounded text-sm"
+                disabled={!areAllJointsValid()}
+                className={`flex-1 py-2 px-4 rounded text-sm transition-all ${
+                  areAllJointsValid()
+                    ? 'tactical-button cursor-pointer'
+                    : 'bg-gray-600 text-gray-400 cursor-not-allowed border border-gray-500'
+                }`}
               >
                 Save & Apply
               </button>
