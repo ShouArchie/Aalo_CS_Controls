@@ -36,8 +36,42 @@ export default function CameraPanel({
     
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((event.clientX - rect.left) * (canvas.width / rect.width));
-    const y = Math.floor((event.clientY - rect.top) * (canvas.height / rect.height));
+    
+    // Calculate the actual image dimensions within the canvas (accounting for object-fit: contain)
+    const imageAspectRatio = canvas.width / canvas.height;
+    const canvasAspectRatio = rect.width / rect.height;
+    
+    let imageDisplayWidth, imageDisplayHeight, offsetX, offsetY;
+    
+    if (imageAspectRatio > canvasAspectRatio) {
+      // Image is wider - letterboxed top/bottom
+      imageDisplayWidth = rect.width;
+      imageDisplayHeight = rect.width / imageAspectRatio;
+      offsetX = 0;
+      offsetY = (rect.height - imageDisplayHeight) / 2;
+    } else {
+      // Image is taller - letterboxed left/right
+      imageDisplayWidth = rect.height * imageAspectRatio;
+      imageDisplayHeight = rect.height;
+      offsetX = (rect.width - imageDisplayWidth) / 2;
+      offsetY = 0;
+    }
+    
+    // Calculate click position relative to the actual image
+    const clickX = event.clientX - rect.left - offsetX;
+    const clickY = event.clientY - rect.top - offsetY;
+    
+    // Convert to image coordinates
+    const displayX = Math.floor((clickX / imageDisplayWidth) * canvas.width);
+    const displayY = Math.floor((clickY / imageDisplayHeight) * canvas.height);
+    
+    // Only process clicks within the image bounds
+    if (displayX < 0 || displayX >= canvas.width || displayY < 0 || displayY >= canvas.height) return;
+    
+    // Account for 180-degree rotation applied in backend
+    // The displayed image is rotated, so we need to transform coordinates back to original orientation
+    const x = canvas.width - displayX - 1;
+    const y = canvas.height - displayY - 1;
     
     try {
               const response = await fetch(API_ENDPOINTS.TEMPERATURE_AT(x, y));
