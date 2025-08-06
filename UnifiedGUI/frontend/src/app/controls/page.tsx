@@ -173,10 +173,10 @@ export default function ControlsPage() {
               moveRobot('z-', 0.1);
               break;
             case 'a':
-              moveRobot('y-', 0.1);
+              moveRobot('y+', 0.1);
               break;
             case 'd':
-              moveRobot('y+', 0.1);
+              moveRobot('y-', 0.1);
               break;
             case 'q':
               moveRobot('x+', 0.1);
@@ -254,10 +254,10 @@ export default function ControlsPage() {
             moveFine('z-', fineStepSize);
             break;
           case 'j':
-            moveFine('y-', fineStepSize);
+            moveFine('y+', fineStepSize);
             break;
           case 'l':
-            moveFine('y+', fineStepSize);
+            moveFine('y-', fineStepSize);
             break;
           case 'u':
             moveFine('x+', fineStepSize);
