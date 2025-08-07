@@ -1,0 +1,98 @@
+
+def onebyonesnake(acc: float = 0.1, vel: float = 0.1, blend_r: float = 0.001, iterations: int = 7):
+    # Cold Spray script that goes right up left up right up etc. 
+    return f"""
+def cold_spray():
+    # First loop - 7 iterations with downward Z movement
+    i = 0
+    while j < {iterations}:
+        while i < 7:
+            movel(pose_trans(get_actual_tcp_pose(), p[0, -0.0274, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            movel(pose_trans(get_actual_tcp_pose(), p[0, 0, -0.002, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            movel(pose_trans(get_actual_tcp_pose(), p[0, 0.0274, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            if i < 6:
+                movel(pose_trans(get_actual_tcp_pose(), p[0, 0, -0.002, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            end
+            i = i + 1
+        end
+        
+        # Second loop - 7 iterations with upward Z movement
+        i = 0
+        while i < 7:
+            movel(pose_trans(get_actual_tcp_pose(), p[0, -0.0274, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0.002, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            
+            if i < 6:
+                movel(pose_trans(get_actual_tcp_pose(), p[0, 0.0274, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+                movel(pose_trans(get_actual_tcp_pose(), p[0, 0, 0.002, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+            end
+            i = i + 1
+        end
+        j = j + 1
+    end
+    
+    # Final extra left movement
+    movel(pose_trans(get_actual_tcp_pose(), p[0, -0.0274, 0, 0, 0, 0]), a={acc}, v={vel}, r={blend_r})
+end
+
+cold_spray()
+"""
+
+
+def spiral_cold_spray(robot, tilt_start=15, tilt_end=8, revs=6, radius_start_mm=10, radius_end_mm=0, cycle_s=0.015, lookahead=0.2, gain=2500):
+    """Spiral path from radius_start to radius_end over given revs."""
+    from robot_functions import get_tcp_pose, _mat_to_aa, send_urscript
+    import math
+
+    x0, y0, z0, *_ = get_tcp_pose(robot)
+
+    lines = ["def spiral_servoj():"]
+
+    steps_per_rev = 180
+    total_steps = int(steps_per_rev * revs)
+
+    for step in range(total_steps + 1):
+        frac = step / total_steps
+        # Interpolate tilt and radius
+        tilt = math.radians(tilt_start + (tilt_end - tilt_start) * frac)
+        radius = (radius_start_mm + (radius_end_mm - radius_start_mm) * frac) / 1000.0
+
+        phi = 2 * math.pi * step / steps_per_rev
+        # Local axis calc
+        axis = (-1.0, 0.0, 0.0)
+        u = (0.0, 0.0, 1.0)
+        v = (0.0, 1.0, 0.0)
+        cp, sp = math.cos(phi), math.sin(phi)
+        X = [
+            math.cos(tilt) * axis[0] + math.sin(tilt) * (cp * u[0] + sp * v[0]),
+            math.cos(tilt) * axis[1] + math.sin(tilt) * (cp * u[1] + sp * v[1]),
+            math.cos(tilt) * axis[2] + math.sin(tilt) * (cp * u[2] + sp * v[2]),
+        ]
+        mag = math.sqrt(sum(c*c for c in X)) or 1.0
+        X = [c/mag for c in X]
+
+        Zdown = (0.0, 0.0, -1.0)
+        Y = [
+            Zdown[1] * X[2] - Zdown[2] * X[1],
+            Zdown[2] * X[0] - Zdown[0] * X[2],
+            Zdown[0] * X[1] - Zdown[1] * X[0],
+        ]
+        mag_y = math.sqrt(sum(c*c for c in Y)) or 1.0
+        Y = [c/mag_y for c in Y]
+        Z = [X[1]*Y[2] - X[2]*Y[1], X[2]*Y[0] - X[0]*Y[2], X[0]*Y[1] - X[1]*Y[0]]
+        R = [[X[0], Y[0], Z[0]], [X[1], Y[1], Z[1]], [X[2], Y[2], Z[2]]]
+        rx, ry, rz = _mat_to_aa(R)
+
+        # Apply spiral offset in TCP XY plane
+        x = x0 + radius * math.cos(phi)
+        y = y0 + radius * math.sin(phi)
+        pose_str = f"{x:.6f}, {y:.6f}, {z0:.6f}, {rx:.6f}, {ry:.6f}, {rz:.6f}"
+        lines.append(f"  servoj(get_inverse_kin(p[{pose_str}]), t={cycle_s}, lookahead_time={lookahead}, gain={gain})")
+        lines.append("  sync()")
+
+    lines.append("end")
+    lines.append("spiral_servoj()")
+
+    send_urscript(robot, "\n".join(lines))
+
+    
