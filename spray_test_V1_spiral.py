@@ -16,12 +16,12 @@ from typing import List
 
 import urx
 
-import robot_functions as rf
+from UR_Cold_Spray_Code import robot_functions as rf
 
 # -----------------------------------------------------------------------------
 # PARAMS
 # -----------------------------------------------------------------------------
-ROBOT_IP = "192.168.0.101"   # ← set your controller IP
+ROBOT_IP = "192.168.10.205"   # ← set your controller IP
 TCP_OFFSET_MM = (-278.81, 0.0, 60.3, 0.0, 0.0, 0.0)  # (x, y, z, rx, ry, rz)
 
 # Home + piece joint targets (radians)
@@ -55,15 +55,19 @@ pieces = [[_deg(a) for a in piece] for piece in [
 
 # Default spiral parameters (tune on rig)
 TILT_START_DEG = 15.0      # start a bit off-normal to avoid rebound
-TILT_END_DEG   = 8.0       # reduce angle as you approach the center
-R_START_MM     = 10.0      # outer radius of coverage
+TILT_END_DEG   = 1       # reduce angle as you approach the center
+R_START_MM     = 50.0      # outer radius of coverage
 R_END_MM       = 0.0       # hit the center
-REVS           = 6.0       # total revolutions from R_START → R_END
+REVS           = 10.0       # total revolutions from R_START → R_END
 STEPS_PER_REV  = 180       # 2° step size (matches your current sampling)
-CYCLE_S        = 0.015     # servoj period (≈66 Hz)
+CYCLE_S        = 0.015     # servoj period (≈66 Hz) - used when not using variable timing
 LOOKAHEAD_S    = 0.2
 GAIN           = 2500
 SING_TOL_DEG   = 1.0       # skip window around 90° and 270°
+
+# Variable cycle timing (optional - set both to None to use fixed CYCLE_S)
+CYCLE_S_START  = 0.015     # starting cycle time (slower) - outer radius
+CYCLE_S_END    = 0.030     # ending cycle time (faster) - inner radius
 
 # Optional: a second interleaved pass with a tiny phase offset
 RUN_INTERLEAVED_SECOND_PASS = True
@@ -94,17 +98,16 @@ def spiral_cold_spray(
     gain: int,
     sing_tol_deg: float,
     phase_offset_deg: float = 0.0,
+    cycle_s_start: float = None,
+    cycle_s_end: float = None,
 ):
-    """Generate a radius-scheduled spiral and execute with servoj.
-
-    - Uses current TCP XYZ as spiral center.
-    - Keeps the singularity avoidance by skipping phases near 90°/270°.
-    - Interpolates tilt linearly from tilt_start → tilt_end over the whole spiral.
-    """
     x0, y0, z0, *_ = rf.get_tcp_pose(robot)
 
     # Precompute counts
     total_steps = int(round(revs * steps_per_rev))
+    
+    # Determine if we're using variable cycle timing
+    use_variable_cycle = cycle_s_start is not None and cycle_s_end is not None
 
     # Build URScript
     lines: List[str] = ["def spiral_servoj():"]
@@ -115,6 +118,12 @@ def spiral_cold_spray(
         tilt = math.radians(tilt_start_deg + (tilt_end_deg - tilt_start_deg) * frac)
         r_mm = r_start_mm + (r_end_mm - r_start_mm) * frac
         r = r_mm / 1000.0
+        
+        # Calculate cycle time (variable or fixed)
+        if use_variable_cycle:
+            current_cycle_s = cycle_s_start + (cycle_s_end - cycle_s_start) * frac
+        else:
+            current_cycle_s = cycle_s
 
         # Phase with optional offset
         phi_deg = (step / steps_per_rev) * 360.0 + phase_offset_deg
@@ -163,7 +172,7 @@ def spiral_cold_spray(
 
         pose_str = ", ".join(f"{v:.6f}" for v in [x, y, z0, rx, ry, rz])
         lines.append(
-            f"  servoj(get_inverse_kin(p[{pose_str}]), t={cycle_s}, lookahead_time={lookahead_s}, gain={gain})"
+            f"  servoj(get_inverse_kin(p[{pose_str}]), t={current_cycle_s:.6f}, lookahead_time={lookahead_s}, gain={gain})"
         )
         lines.append("  sync()")
 
@@ -187,16 +196,7 @@ def main():
         rf.move_to_joint_position(robot, home, acc=ACC_MOVE, vel=VEL_MOVE, wait=True)
         time.sleep(1.0)
 
-        # Optionally go to a selected piece pose
-        if PIECE_INDEX is not None:
-            idx = max(1, min(16, PIECE_INDEX)) - 1
-            print(f"Moving to piece {idx+1} …")
-            rf.move_to_joint_position(robot, pieces[idx], acc=ACC_MOVE, vel=VEL_MOVE, wait=True)
-            time.sleep(0.5)
-
-        # Small approach if you need to set standoff precisely (tool frame)
-        # rf.translate_tcp(robot, dz_mm=-5, acc=0.5, vel=0.5)
-
+       
         # Pass 1 (outer → inner)
         print("Starting spiral pass 1 …")
         spiral_cold_spray(
@@ -212,38 +212,12 @@ def main():
             gain=GAIN,
             sing_tol_deg=SING_TOL_DEG,
             phase_offset_deg=0.0,
+            cycle_s_start=CYCLE_S_START,
+            cycle_s_end=CYCLE_S_END,
         )
         time.sleep(1.0)
         rf.wait_until_idle(robot)
 
-        # Optional Pass 2 (interleaved)
-        if RUN_INTERLEAVED_SECOND_PASS:
-            print("Starting spiral pass 2 (interleaved) …")
-            spiral_cold_spray(
-                robot,
-                tilt_start_deg=TILT_START_DEG,
-                tilt_end_deg=TILT_END_DEG,
-                revs=REVS,
-                r_start_mm=R_START_MM,
-                r_end_mm=R_END_MM,
-                steps_per_rev=STEPS_PER_REV,
-                cycle_s=CYCLE_S,
-                lookahead_s=LOOKAHEAD_S,
-                gain=GAIN,
-                sing_tol_deg=SING_TOL_DEG,
-                phase_offset_deg=PHASE_OFFSET_DEG,
-            )
-            time.sleep(1.0)
-            rf.wait_until_idle(robot)
-
-        print("Spiral spray complete. Backing off …")
-        # Back off safely
-        rf.translate_tcp(robot, dx_mm=100, dz_mm=-100, acc=0.8, vel=0.6)
-        time.sleep(0.5)
-
-        print("Returning HOME …")
-        rf.move_to_joint_position(robot, home, acc=ACC_MOVE, vel=VEL_MOVE, wait=True)
-        print("✓ complete")
 
     finally:
         robot.close()
