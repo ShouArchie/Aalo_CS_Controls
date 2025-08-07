@@ -247,9 +247,12 @@ class UnifiedRobotController:
             
             print(f"🤖 Moving robot {direction} with velocity: {velocity} (speed: {speed_percent}%)")
             
+            # Use URScript speedl command for continuous movement
+            # speedl([x, y, z, rx, ry, rz], acceleration, time)
+            # Use short duration since frontend sends commands every 150ms
             base_acceleration = 0.5  # Base acceleration
             acceleration = base_acceleration * (speed_percent / 100.0)
-            urscript_cmd = f"speedl([{velocity[0]:.6f}, {velocity[1]:.6f}, {velocity[2]:.6f}, {velocity[3]:.6f}, {velocity[4]:.6f}, {velocity[5]:.6f}], {acceleration:.6f}, 0)"
+            urscript_cmd = f"speedl([{velocity[0]:.6f}, {velocity[1]:.6f}, {velocity[2]:.6f}, {velocity[3]:.6f}, {velocity[4]:.6f}, {velocity[5]:.6f}], {acceleration:.6f}, 0.4)"
             self.robot_controller.robot.send_program(urscript_cmd)
             
             print(f"✅ URScript speedl command sent: {urscript_cmd}")
@@ -258,7 +261,7 @@ class UnifiedRobotController:
         except Exception as e:
             print(f"❌ Movement error: {e}")
             return {"success": False, "error": str(e)}
-    
+
     def stop_movement(self) -> dict:
         """Stop all robot movement using URScript"""
         try:
@@ -588,7 +591,7 @@ align_tool()
             return {"success": False, "error": str(e)}
 
     def execute_cold_spray_pattern(self, acc: float = 0.1, vel: float = 0.1, blend_r: float = 0.001, iterations: int = 7) -> dict:
-        """Execute blended spray pattern with forward/reverse cycles"""
+        """Execute blended spray pattern with forward/reverse cycles in background thread"""
         try:
             if not self.connected or not self.robot_controller:
                 return {"success": False, "error": "Robot not connected"}
@@ -599,12 +602,17 @@ align_tool()
             print(f"🧊 Executing blended spray pattern: acc={acc}, vel={vel}, blend_r={blend_r}, iterations={iterations}")
             print(f"📜 URScript length: {len(urscript)} characters")
             
-            # Send the URScript program to the robot
-            self.robot_controller.robot.send_program(urscript)
+            # Start execution in background thread to keep camera streaming
+            spray_thread = threading.Thread(
+                target=self._execute_cold_spray_background,
+                args=(urscript, acc, vel, blend_r, iterations),
+                daemon=True
+            )
+            spray_thread.start()
             
             return {
                 "success": True, 
-                "message": f"Blended spray pattern started with {iterations} iterations",
+                "message": f"Started blended spray pattern with {iterations} iterations in background - camera will continue streaming",
                 "parameters": {
                     "acceleration": acc,
                     "velocity": vel,
@@ -615,6 +623,19 @@ align_tool()
         except Exception as e:
             print(f"❌ Blended spray pattern error: {e}")
             return {"success": False, "error": str(e)}
+    
+    def _execute_cold_spray_background(self, urscript: str, acc: float, vel: float, blend_r: float, iterations: int):
+        """Background execution of cold spray pattern"""
+        try:
+            print(f"🧊 Executing blended spray pattern in background thread")
+            
+            # Send the URScript program to the robot
+            self.robot_controller.robot.send_program(urscript)
+            
+            print(f"🎯 Cold spray pattern with {iterations} iterations completed successfully!")
+            
+        except Exception as e:
+            print(f"❌ Background cold spray error: {e}")
     
     def _generate_cold_spray_urscript(self, acc: float, vel: float, blend_r: float, iterations: int) -> str:
         """Generate URScript for blended spray pattern"""
@@ -664,7 +685,7 @@ blended_spray()
 """
 
     def execute_conical_spray_paths(self, spray_paths: list) -> dict:
-        """Execute a list of conical spray paths (1-4 sweeps)"""
+        """Execute a list of conical spray paths (1-4 sweeps) in background thread"""
         try:
             if not self.connected or not self.robot_controller:
                 return {"success": False, "error": "Robot not connected"}
@@ -672,7 +693,28 @@ blended_spray()
             if rf is None:
                 return {"success": False, "error": "robot_functions module not available"}
             
-            print(f"🌀 Executing {len(spray_paths)} conical spray path(s)")
+            # Start execution in background thread to keep camera streaming
+            spray_thread = threading.Thread(
+                target=self._execute_conical_spray_background,
+                args=(spray_paths,),
+                daemon=True
+            )
+            spray_thread.start()
+            
+            return {
+                "success": True,
+                "message": f"Started {len(spray_paths)} conical spray path(s) in background - camera will continue streaming",
+                "paths_to_execute": len(spray_paths)
+            }
+            
+        except Exception as e:
+            print(f"❌ Conical spray paths error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def _execute_conical_spray_background(self, spray_paths: list):
+        """Background execution of conical spray paths"""
+        try:
+            print(f"🌀 Executing {len(spray_paths)} conical spray path(s) in background thread")
             tilt = 0
             for i, path in enumerate(spray_paths, 1):
                 tilt_deg = path['tilt']
@@ -691,7 +733,7 @@ blended_spray()
                     steps=steps,
                     cycle_s=cycle_s,
                     lookahead_time=0.1,
-                    gain=1800,  
+                    gain=2800,  
                     sing_tol_deg=0.5
                 )
                 
@@ -700,17 +742,13 @@ blended_spray()
                 rf.wait_until_idle(self.robot_controller.robot)
                 
                 print(f"   ✓ Sweep {i} completed")
+            
+            # Final cleanup rotation
             rf.rotate_tcp(self.robot_controller.robot, ry_deg=-tilt, acc=1.5, vel=1)
-            # rf.translate_tcp(self.robot_controller.robot, dy_mm= -50, acc=1, vel=1)
-            return {
-                "success": True,
-                "message": f"Executed {len(spray_paths)} conical spray path(s) successfully",
-                "paths_executed": len(spray_paths)
-            }
+            print(f"🎯 All {len(spray_paths)} conical spray paths completed successfully!")
             
         except Exception as e:
-            print(f"❌ Conical spray paths error: {e}")
-            return {"success": False, "error": str(e)}
+            print(f"❌ Background conical spray error: {e}")
 
     def get_status(self) -> dict:
         """Get current robot status"""

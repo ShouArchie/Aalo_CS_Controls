@@ -81,6 +81,9 @@ The frontend is now organized into **three distinct pages** for better workflow 
     - Translation and rotation buttons
     - Keyboard shortcuts (IJKL/UO for translation, RF/TG/YH for rotation)
   - **Bottom Section**: Cold Spray Pattern controls with customizable parameters
+    - Conical Spray Paths with JSON configuration support
+    - Tool Alignment operations
+    - Background execution for all spray patterns (cameras remain streaming)
 
 ### 🔧 **Navigation & Features**
 - **Cross-page navigation**: Each page has quick access buttons to other sections
