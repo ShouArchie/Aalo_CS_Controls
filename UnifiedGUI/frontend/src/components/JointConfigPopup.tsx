@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
+import { API_ENDPOINTS } from '@/lib/config';
 
 interface JointConfigPopupProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface JointConfigPopupProps {
   homeJoints: number[];
   onUpdate: (joints: number[]) => void;
   onSave: () => void;
+  onSaveCurrentAsHome: () => void;
 }
 
 export default function JointConfigPopup({ 
@@ -16,15 +18,52 @@ export default function JointConfigPopup({
   onClose, 
   homeJoints, 
   onUpdate, 
-  onSave 
+  onSave,
+  onSaveCurrentAsHome
 }: JointConfigPopupProps) {
   // Store as strings to allow empty values during editing
   const [localJoints, setLocalJoints] = useState(homeJoints.map(j => j.toString()));
+  
+  // State for current robot joint angles
+  const [currentRobotJoints, setCurrentRobotJoints] = useState<number[]>([]);
+  const [loadingCurrentJoints, setLoadingCurrentJoints] = useState(false);
 
   // Sync local joints when popup opens with new homeJoints values
   if (isOpen && localJoints.length !== homeJoints.length) {
     setLocalJoints(homeJoints.map(j => j.toString()));
   }
+
+  // Fetch current robot joint angles when popup opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchCurrentJoints();
+    }
+  }, [isOpen]);
+
+  const fetchCurrentJoints = async () => {
+    try {
+      setLoadingCurrentJoints(true);
+      const response = await fetch(API_ENDPOINTS.ROBOT_CURRENT_JOINTS);
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setCurrentRobotJoints(result.joints_deg);
+        } else {
+          console.error('❌ Failed to get current joints:', result.error);
+          setCurrentRobotJoints([]); // Clear on error
+        }
+      } else {
+        console.error('❌ HTTP error getting current joints:', response.status);
+        setCurrentRobotJoints([]); // Clear on error
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch current joints:', error);
+      setCurrentRobotJoints([]); // Clear on error
+    } finally {
+      setLoadingCurrentJoints(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -118,9 +157,40 @@ export default function JointConfigPopup({
               ))}
             </div>
 
-            {/* Current values display */}
+            {/* Current robot values display */}
             <div className="bg-surface-dark/50 p-3 rounded border border-accent/20">
-              <h4 className="text-xs text-accent font-tactical mb-2">Current Values (degrees):</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs text-accent font-tactical">Current Robot Position (degrees):</h4>
+                <button
+                  onClick={fetchCurrentJoints}
+                  disabled={loadingCurrentJoints}
+                  className="text-xs px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded border border-blue-500/30 transition-colors"
+                >
+                  {loadingCurrentJoints ? '🔄' : '🔄 Refresh'}
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                {loadingCurrentJoints ? (
+                  <div className="col-span-3 text-center text-text-secondary">
+                    Loading current position...
+                  </div>
+                ) : currentRobotJoints.length > 0 ? (
+                  currentRobotJoints.map((joint, index) => (
+                    <div key={index} className="text-text-secondary">
+                      J{index + 1}: {joint.toFixed(2)}°
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-3 text-center text-red-400">
+                    Robot not connected or unable to read position
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Home joint values display */}
+            <div className="bg-surface-dark/50 p-3 rounded border border-accent/20">
+              <h4 className="text-xs text-accent font-tactical mb-2">Home Joint Configuration (degrees):</h4>
               <div className="grid grid-cols-3 gap-2 text-xs font-mono">
                 {localJoints.map((joint, index) => (
                   <div key={index} className="text-text-secondary">
@@ -142,6 +212,16 @@ export default function JointConfigPopup({
                 </p>
               </div>
             )}
+
+            {/* Save current position button */}
+            <div className="flex justify-center mb-3">
+              <button 
+                onClick={onSaveCurrentAsHome}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors border border-blue-500"
+              >
+                📍 Save Current as Home
+              </button>
+            </div>
 
             {/* Action buttons */}
             <div className="flex gap-3">

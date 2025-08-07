@@ -32,7 +32,7 @@ export default function ControlsPage() {
   
   // TCP configuration
   const [selectedTcp, setSelectedTcp] = useState(1);
-  const [customTcp, setCustomTcp] = useState([-278.81, 0, 66.65, 0, 0, 0]); // [x, y, z, rx, ry, rz]
+  const [customTcp, setCustomTcp] = useState([-278.81, 0, 72, 0, 0, 0]); // [x, y, z, rx, ry, rz]
   
   // Global speed control
   const [globalSpeedPercent, setGlobalSpeedPercent] = useState(100);  // 0-100%
@@ -95,7 +95,7 @@ export default function ControlsPage() {
 
   // TCP Presets
   const TCP_PRESETS: Record<number, { name: string; offset: number[] }> = {
-    1: { name: "TCP Offset + 20mm", offset: [-278.81, 0.0, 66.65, 0.0, 0.0, 0.0] },
+    1: { name: "TCP Offset + 20mm", offset: [-278.81, 0.0, 72, 0.0, 0.0, 0.0] },
     2: { name: "TCP Center of Pipe + 20mm", offset: [-362.9475, 0.0, 66.65, 0.0, 0.0, 0.0] },
     3: { name: "TCP Offset + 0mm", offset: [-258.81, 0.0, 66.65, 0.0, 0.0, 0.0] },
     4: { name: "No TCP (Base)", offset: [0, 0, 0, 0, 0, 0] },
@@ -420,6 +420,31 @@ export default function ControlsPage() {
       }
     } catch (error) {
       console.error('Failed to update home joints config:', error);
+    }
+  };
+
+  const saveCurrentAsHome = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.ROBOT_SAVE_CURRENT_AS_HOME, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Update the local state with the new home joints
+          setHomeJoints(result.joints_deg);
+          console.log('✅ Current position saved as new home:', result.message);
+          setShowJointConfig(false); // Close the popup
+        } else {
+          console.error('❌ Failed to save current as home:', result.error);
+        }
+      } else {
+        console.error('❌ HTTP error saving current as home:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Failed to save current position as home:', error);
     }
   };
 
@@ -1110,7 +1135,7 @@ export default function ControlsPage() {
                       </SelectTrigger>
                       <SelectContent className="bg-surface-dark border-accent/30">
                         <SelectItem value="1" className="text-sm text-text-primary hover:bg-accent/20">
-                          1: TCP Offset + 20mm (-278.81, 0, 60.3)
+                          1: TCP Offset + 20mm (-278.81, 0, 72)
                         </SelectItem>
                         <SelectItem value="2" className="text-sm text-text-primary hover:bg-accent/20">
                           2: TCP Center of Pipe + 20mm (-362.9475, 0.0, 60.3)
@@ -1617,6 +1642,7 @@ export default function ControlsPage() {
         homeJoints={homeJoints}
         onUpdate={setHomeJoints}
         onSave={updateHomeJoints}
+        onSaveCurrentAsHome={saveCurrentAsHome}
       />
     </main>
   );

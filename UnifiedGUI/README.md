@@ -80,6 +80,8 @@ The frontend is now organized into **three distinct pages** for better workflow 
     - Rotation angle configuration
     - Translation and rotation buttons
     - Keyboard shortcuts (IJKL/UO for translation, RF/TG/YH for rotation)
+    - **Save Current as Home**: One-click button to save current joint angles as new home position
+    - **Live Robot Position Display**: Real-time display of current robot joint angles with refresh capability
   - **Bottom Section**: Cold Spray Pattern controls with customizable parameters
     - Conical Spray Paths with JSON configuration support
     - Tool Alignment operations

@@ -760,6 +760,24 @@ async def update_home_joints_config(request: HomeJointsRequest):
     result = robot_controller.update_home_joints_config(request.joints)
     return result
 
+@app.get("/api/robot/current-joints")
+async def get_current_joint_angles():
+    """Get current joint angles from the robot."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.get_current_joint_angles()
+    return result
+
+@app.post("/api/robot/config/save-current-as-home")
+async def save_current_joints_as_home():
+    """Save current joint angles as the new home position."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    result = robot_controller.save_current_joints_as_home()
+    return result
+
 @app.post("/api/robot/move-fine")
 async def move_robot_fine(request: FineMovementRequest):
     """Fine robot movement in TCP coordinates (precise positioning)."""

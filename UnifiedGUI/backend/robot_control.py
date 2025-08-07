@@ -217,6 +217,61 @@ class UnifiedRobotController:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    def get_current_joint_angles(self) -> dict:
+        """Get current joint angles from the robot"""
+        try:
+            if not self.connected or not self.robot_controller:
+                return {"success": False, "error": "Robot not connected"}
+            
+            # Get current joint angles in radians
+            current_joints_rad = self.robot_controller.robot.getj()
+            
+            # Convert to degrees
+            import math
+            current_joints_deg = [math.degrees(angle) for angle in current_joints_rad]
+            
+            return {
+                "success": True,
+                "joints_deg": current_joints_deg,
+                "joints_rad": current_joints_rad
+            }
+                
+        except Exception as e:
+            print(f"❌ Error getting current joint angles: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def save_current_joints_as_home(self) -> dict:
+        """Get current joint angles and save them as the new home position"""
+        try:
+            if not self.connected or not self.robot_controller:
+                return {"success": False, "error": "Robot not connected"}
+            
+            # Get current joint angles in radians
+            current_joints_rad = self.robot_controller.robot.getj()
+            
+            # Convert to degrees
+            import math
+            current_joints_deg = [math.degrees(angle) for angle in current_joints_rad]
+            
+            print(f"📍 Current joint angles: {[f'{angle:.1f}°' for angle in current_joints_deg]}")
+            
+            # Save as new home position using existing method
+            update_result = self.update_home_joints_config(current_joints_deg)
+            
+            if update_result["success"]:
+                return {
+                    "success": True,
+                    "message": f"Current position saved as new home: {[f'{angle:.1f}°' for angle in current_joints_deg]}",
+                    "joints_deg": current_joints_deg,
+                    "joints_rad": current_joints_rad
+                }
+            else:
+                return update_result
+                
+        except Exception as e:
+            print(f"❌ Error saving current joints as home: {e}")
+            return {"success": False, "error": str(e)}
+    
     def move_manual(self, direction: str, distance: float, speed_percent: float = 100.0, base_speed: float = 0.1) -> dict:
         """Manual robot movement using speedl in tool coordinate system"""
         try:

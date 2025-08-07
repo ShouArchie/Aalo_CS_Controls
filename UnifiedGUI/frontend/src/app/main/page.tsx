@@ -113,6 +113,31 @@ export default function MainDashboard() {
     }
   };
 
+  const saveCurrentAsHome = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.ROBOT_SAVE_CURRENT_AS_HOME, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Update the local state with the new home joints
+          setHomeJoints(result.joints_deg);
+          console.log('✅ Current position saved as new home:', result.message);
+          setShowJointConfig(false); // Close the popup
+        } else {
+          console.error('❌ Failed to save current as home:', result.error);
+        }
+      } else {
+        console.error('❌ HTTP error saving current as home:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Failed to save current position as home:', error);
+    }
+  };
+
   // Robot control functions
   const connectRobot = async () => {
     try {
@@ -387,6 +412,7 @@ export default function MainDashboard() {
         homeJoints={homeJoints}
         onUpdate={setHomeJoints}
         onSave={() => {}}
+        onSaveCurrentAsHome={saveCurrentAsHome}
       />
     </main>
   );
