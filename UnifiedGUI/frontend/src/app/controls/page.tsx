@@ -59,6 +59,24 @@ export default function ControlsPage() {
 
   // Conical spray paths configuration
   const [conicalSprayPaths, setConicalSprayPaths] = useState("");
+  
+  // Spiral spray configuration  
+  const [spiralSprayParams, setSpiralSprayParams] = useState({
+    tilt_start_deg: 15.0,
+    tilt_end_deg: 1.0,
+    revs: 10.0,
+    r_start_mm: 50.0,
+    r_end_mm: 0.0,
+    steps_per_rev: 120,
+    cycle_s: 0.02,
+    lookahead_s: 0.1,
+    gain: 2800,
+    sing_tol_deg: 0.5,
+    invert_tilt: false,
+    use_variable_cycle: false,
+    cycle_s_start: 0.025,
+    cycle_s_end: 0.015
+  });
 
   // Validation for cold spray parameters
   const isValidSprayParams = () => {
@@ -260,10 +278,10 @@ export default function ControlsPage() {
             moveFine('y-', fineStepSize);
             break;
           case 'u':
-            moveFine('x+', fineStepSize);
+            moveFine('x-', fineStepSize);
             break;
           case 'o':
-            moveFine('x-', fineStepSize);
+            moveFine('x+', fineStepSize);
             break;
           case 'r':
             moveRotation('rx+', rotationAngle);
@@ -776,10 +794,45 @@ export default function ControlsPage() {
         const error = await response.json();
         console.error('Failed to execute conical spray paths:', error.error || 'Unknown error');
       }
-    } catch (error) {
-      console.error('Failed to execute conical spray paths:', error);
+      } catch (error) {
+    console.error('Failed to execute conical spray paths:', error);
+  }
+};
+
+// Execute spiral spray pattern
+const executeSpiralSpray = async () => {
+  try {
+    if (!robotConnected) {
+      console.error('Robot not connected');
+      return;
     }
-  };
+
+    console.log(`🌀 Executing spiral spray pattern:`, spiralSprayParams);
+    
+    // Prepare parameters, only send cycle_s_start/end if variable cycle is enabled
+    const { use_variable_cycle, ...baseParams } = spiralSprayParams;
+    const params = use_variable_cycle 
+      ? baseParams 
+      : { ...baseParams, cycle_s_start: undefined, cycle_s_end: undefined };
+    
+    const response = await fetch(API_ENDPOINTS.ROBOT_SPIRAL_SPRAY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spiral_params: JSON.stringify(params)
+      })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      console.log(`✅ Spiral spray pattern executed:`, result.message);
+    } else {
+      console.error('Failed to execute spiral spray pattern:', result.error || 'Unknown error');
+    }
+  } catch (error) {
+    console.error('Failed to execute spiral spray pattern:', error);
+  }
+};
 
   return (
     <main className="min-h-screen relative overflow-hidden">
@@ -1625,6 +1678,282 @@ export default function ControlsPage() {
                 <div className="text-4xl mb-4">🌀</div>
                 <div className="text-lg">Robot Not Connected</div>
                 <div className="text-sm">Connect robot to use conical spray paths</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Spiral Spray Pattern Controls */}
+      <div className="tactical-panel p-6">
+        <div className="bg-surface-dark p-6 rounded-lg border border-border-tactical">
+          <h3 className="text-lg font-tactical text-accent font-medium">Spiral Spray Pattern</h3>
+          <p className="text-sm text-text-secondary mb-6">Configure spiral motion with linearly varying tilt angle</p>
+          
+          {robotConnected && (
+            <>
+              {/* Spiral Parameters Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {/* Tilt Start/End */}
+                <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                  <h4 className="text-sm font-bold text-accent mb-3">Tilt Angles</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">Start Tilt (deg)</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.tilt_start_deg}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, tilt_start_deg: parseFloat(e.target.value) || 0})}
+                        className="w-full"
+                        step="0.1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">End Tilt (deg)</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.tilt_end_deg}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, tilt_end_deg: parseFloat(e.target.value) || 0})}
+                        className="w-full"
+                        step="0.1"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={spiralSprayParams.invert_tilt}
+                        onCheckedChange={(checked) => setSpiralSprayParams({...spiralSprayParams, invert_tilt: checked})}
+                      />
+                      <label className="text-xs text-text-secondary">Invert Tilt</label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Spiral Dimensions */}
+                <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                  <h4 className="text-sm font-bold text-accent mb-3">Spiral Dimensions</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">Revolutions</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.revs}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, revs: parseFloat(e.target.value) || 0})}
+                        className="w-full"
+                        step="0.1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">Start Radius (mm)</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.r_start_mm}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, r_start_mm: parseFloat(e.target.value) || 0})}
+                        className="w-full"
+                        step="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">End Radius (mm)</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.r_end_mm}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, r_end_mm: parseFloat(e.target.value) || 0})}
+                        className="w-full"
+                        step="1"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Motion Parameters */}
+                <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                  <h4 className="text-sm font-bold text-accent mb-3">Motion Control</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">Steps per Revolution</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.steps_per_rev}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, steps_per_rev: parseInt(e.target.value) || 0})}
+                        className="w-full"
+                        step="1"
+                      />
+                    </div>
+                    
+                    {/* Variable Cycle Time Toggle */}
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={spiralSprayParams.use_variable_cycle}
+                        onCheckedChange={(checked) => setSpiralSprayParams({...spiralSprayParams, use_variable_cycle: checked})}
+                      />
+                      <label className="text-xs text-text-secondary">Variable Cycle Time</label>
+                    </div>
+                    
+                    {!spiralSprayParams.use_variable_cycle ? (
+                      // Fixed cycle time
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Cycle Time (s)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.cycle_s}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.001"
+                        />
+                      </div>
+                    ) : (
+                      // Variable cycle time start/end
+                      <>
+                        <div>
+                          <label className="block text-xs text-text-secondary mb-1">Start Cycle Time (s)</label>
+                          <Input
+                            type="number"
+                            value={spiralSprayParams.cycle_s_start}
+                            onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s_start: parseFloat(e.target.value) || 0})}
+                            className="w-full"
+                            step="0.001"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-text-secondary mb-1">End Cycle Time (s)</label>
+                          <Input
+                            type="number"
+                            value={spiralSprayParams.cycle_s_end}
+                            onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s_end: parseFloat(e.target.value) || 0})}
+                            className="w-full"
+                            step="0.001"
+                          />
+                        </div>
+                      </>
+                    )}
+                    
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">Lookahead (s)</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.lookahead_s}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, lookahead_s: parseFloat(e.target.value) || 0})}
+                        className="w-full"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Advanced Parameters */}
+                <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                  <h4 className="text-sm font-bold text-accent mb-3">Advanced</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">Gain</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.gain}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, gain: parseInt(e.target.value) || 0})}
+                        className="w-full"
+                        step="100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-secondary mb-1">Singularity Tolerance (deg)</label>
+                      <Input
+                        type="number"
+                        value={spiralSprayParams.sing_tol_deg}
+                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, sing_tol_deg: parseFloat(e.target.value) || 0})}
+                        className="w-full"
+                        step="0.1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="mb-6">
+                <h4 className="text-sm font-bold text-accent mb-3">Quick Presets</h4>
+                <div className="flex flex-wrap gap-2">
+                  <button 
+                    onClick={() => setSpiralSprayParams({
+                      tilt_start_deg: 15.0, tilt_end_deg: 1.0, revs: 10.0, r_start_mm: 50.0, r_end_mm: 0.0,
+                      steps_per_rev: 120, cycle_s: 0.02, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
+                      use_variable_cycle: false, cycle_s_start: 0.025, cycle_s_end: 0.015
+                    })}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Standard
+                  </button>
+                  <button 
+                    onClick={() => setSpiralSprayParams({
+                      tilt_start_deg: 20.0, tilt_end_deg: 5.0, revs: 5.0, r_start_mm: 30.0, r_end_mm: 0.0,
+                      steps_per_rev: 180, cycle_s: 0.015, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
+                      use_variable_cycle: false, cycle_s_start: 0.020, cycle_s_end: 0.010
+                    })}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Fast
+                  </button>
+                  <button 
+                    onClick={() => setSpiralSprayParams({
+                      tilt_start_deg: 10.0, tilt_end_deg: 0.5, revs: 15.0, r_start_mm: 75.0, r_end_mm: 0.0,
+                      steps_per_rev: 90, cycle_s: 0.025, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
+                      use_variable_cycle: false, cycle_s_start: 0.030, cycle_s_end: 0.020
+                    })}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Large
+                  </button>
+                  <button 
+                    onClick={() => setSpiralSprayParams({
+                      tilt_start_deg: 15.0, tilt_end_deg: 1.0, revs: 10.0, r_start_mm: 50.0, r_end_mm: 0.0,
+                      steps_per_rev: 120, cycle_s: 0.02, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
+                      use_variable_cycle: true, cycle_s_start: 0.025, cycle_s_end: 0.015
+                    })}
+                    className="tactical-button py-2 px-3 text-sm"
+                  >
+                    Variable Speed
+                  </button>
+                </div>
+              </div>
+
+              {/* Execute Button */}
+              <div className="flex justify-center">
+                <button
+                  onClick={executeSpiralSpray}
+                  disabled={toolAligning}
+                  className={`tactical-button py-3 px-6 text-base font-bold rounded-lg ${
+                    toolAligning
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700'
+                  }`}
+                >
+                  🌀 EXECUTE SPIRAL SPRAY
+                </button>
+              </div>
+
+              {/* Info */}
+              <div className="text-xs text-text-secondary bg-surface-dark/50 p-3 rounded mt-4">
+                <div className="font-bold text-accent mb-2">Pattern Info:</div>
+                <div>• <span className="text-orange-400">Total Steps:</span> {Math.round(spiralSprayParams.revs * spiralSprayParams.steps_per_rev)}</div>
+                {spiralSprayParams.use_variable_cycle ? (
+                  <div>• <span className="text-red-400">Cycle Time:</span> {spiralSprayParams.cycle_s_start}s → {spiralSprayParams.cycle_s_end}s (variable)</div>
+                ) : (
+                  <div>• <span className="text-red-400">Duration:</span> ~{(spiralSprayParams.revs * spiralSprayParams.steps_per_rev * spiralSprayParams.cycle_s).toFixed(1)}s</div>
+                )}
+                <div>• <span className="text-blue-400">Tilt Range:</span> {spiralSprayParams.tilt_start_deg}° → {spiralSprayParams.tilt_end_deg}°</div>
+                <div>• <span className="text-green-400">Radius:</span> {spiralSprayParams.r_start_mm}mm → {spiralSprayParams.r_end_mm}mm</div>
+                {spiralSprayParams.invert_tilt && (
+                  <div>• <span className="text-purple-400">Tilt:</span> Inverted direction</div>
+                )}
+              </div>
+            </>
+          )}
+
+          {!robotConnected && (
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center text-text-secondary">
+                <div className="text-4xl mb-4">🌀</div>
+                <div className="text-lg">Robot Not Connected</div>
+                <div className="text-sm">Connect robot to use spiral spray pattern</div>
               </div>
             </div>
           )}

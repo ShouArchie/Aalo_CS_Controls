@@ -474,17 +474,39 @@ def conical_motion_servoj_script(
     avoid_singular: bool = True,
     sing_tol_deg: float = 1.0,
 ):
+    """Generate a conical motion with constant angle from starting orientation.
+    
+    - Uses current TCP XYZ as center position.
+    - Uses current TCP orientation as starting reference.
+    - Creates orientations that maintain constant angle (tilt_deg) from starting normal direction.
+    - Tool X-axis maintains constant angle from starting tool X-axis direction.
+    """
+    # Get current TCP pose and orientation as starting reference
+    current_pose = get_tcp_pose(robot)
+    x0, y0, z0 = current_pose[0], current_pose[1], current_pose[2]
+    starting_rx, starting_ry, starting_rz = current_pose[3], current_pose[4], current_pose[5]
+    
+    # Convert starting orientation to rotation matrix
+    starting_angle_mag = math.sqrt(starting_rx*starting_rx + starting_ry*starting_ry + starting_rz*starting_rz)
+    if starting_angle_mag > 1e-6:
+        # Normalized axis
+        start_ax = starting_rx / starting_angle_mag
+        start_ay = starting_ry / starting_angle_mag  
+        start_az = starting_rz / starting_angle_mag
+        
+        # Rodrigues formula for starting rotation matrix
+        cos_theta = math.cos(starting_angle_mag)
+        sin_theta = math.sin(starting_angle_mag)
+        
+        starting_rotation_matrix = [
+            [cos_theta + start_ax*start_ax*(1-cos_theta), start_ax*start_ay*(1-cos_theta) - start_az*sin_theta, start_ax*start_az*(1-cos_theta) + start_ay*sin_theta],
+            [start_ay*start_ax*(1-cos_theta) + start_az*sin_theta, cos_theta + start_ay*start_ay*(1-cos_theta), start_ay*start_az*(1-cos_theta) - start_ax*sin_theta],
+            [start_az*start_ax*(1-cos_theta) - start_ay*sin_theta, start_az*start_ay*(1-cos_theta) + start_ax*sin_theta, cos_theta + start_az*start_az*(1-cos_theta)]
+        ]
+    else:
+        starting_rotation_matrix = [[1,0,0], [0,1,0], [0,0,1]]  # Identity matrix
 
-    # Current TCP position (XYZ only) becomes the apex of the cone
-    x0, y0, z0, *_ = get_tcp_pose(robot)
-
-    # Unit vectors for frame construction (same math as *conical_motion_script*)
-    axis = (-1.0, 0.0, 0.0)  # desired mean tool axis (−X in base)
-    u = (0.0, 0.0, 1.0)      # helper vectors to spin around *axis*
-    v = (0.0, 1.0, 0.0)
-
-    theta = math.radians(tilt_deg)
-    cos_t, sin_t = math.cos(theta), math.sin(theta)
+    theta_tilt = math.radians(tilt_deg)
 
     # Build full list of poses (axis-angle) that realise the cone
     pts: list[list[float]] = []
@@ -498,27 +520,42 @@ def conical_motion_servoj_script(
             # Skip configurations that get too close to wrist singularities
             continue
 
-        cp, sp = math.cos(phi), math.sin(phi)
-        X = [
-            cos_t * axis[0] + sin_t * (cp * u[0] + sp * v[0]),
-            cos_t * axis[1] + sin_t * (cp * u[1] + sp * v[1]),
-            cos_t * axis[2] + sin_t * (cp * u[2] + sp * v[2]),
+        # Create rotation axis perpendicular to starting normal direction
+        # This varies around the cone to create the circular motion
+        rotation_axis = [0.0, math.cos(phi), math.sin(phi)]
+        
+        # Normalize rotation axis
+        axis_mag = math.sqrt(rotation_axis[0]*rotation_axis[0] + rotation_axis[1]*rotation_axis[1] + rotation_axis[2]*rotation_axis[2])
+        if axis_mag > 1e-6:
+            rotation_axis = [rotation_axis[0]/axis_mag, rotation_axis[1]/axis_mag, rotation_axis[2]/axis_mag]
+        else:
+            rotation_axis = [0.0, 1.0, 0.0]  # Default to Y-axis
+        
+        # Create rotation matrix for tilt around rotation_axis using Rodrigues formula
+        cos_tilt = math.cos(theta_tilt)
+        sin_tilt = math.sin(theta_tilt)
+        ax, ay, az = rotation_axis[0], rotation_axis[1], rotation_axis[2]
+        
+        R_tilt = [
+            [cos_tilt + ax*ax*(1-cos_tilt), ax*ay*(1-cos_tilt) - az*sin_tilt, ax*az*(1-cos_tilt) + ay*sin_tilt],
+            [ay*ax*(1-cos_tilt) + az*sin_tilt, cos_tilt + ay*ay*(1-cos_tilt), ay*az*(1-cos_tilt) - ax*sin_tilt],
+            [az*ax*(1-cos_tilt) - ay*sin_tilt, az*ay*(1-cos_tilt) + ax*sin_tilt, cos_tilt + az*az*(1-cos_tilt)]
         ]
-        mag = math.sqrt(sum(c * c for c in X)) or 1.0
-        X = [c / mag for c in X]
-
-        # Orthonormal Y,Z to complete the frame (Z = X × Y, Y chosen so Z≈world −Z)
-        Zdown = (0.0, 0.0, -1.0)
-        Y = [
-            Zdown[1] * X[2] - Zdown[2] * X[1],
-            Zdown[2] * X[0] - Zdown[0] * X[2],
-            Zdown[0] * X[1] - Zdown[1] * X[0],
+        
+        # Apply rotation to starting orientation: target = R_tilt * starting_rotation_matrix
+        target_rotation_matrix = [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0], 
+            [0.0, 0.0, 0.0]
         ]
-        mag_y = math.sqrt(sum(c * c for c in Y)) or 1.0
-        Y = [c / mag_y for c in Y]
-        Z = [X[1] * Y[2] - X[2] * Y[1], X[2] * Y[0] - X[0] * Y[2], X[0] * Y[1] - X[1] * Y[0]]
-        R = [[X[0], Y[0], Z[0]], [X[1], Y[1], Z[1]], [X[2], Y[2], Z[2]]]
-        rx, ry, rz = _mat_to_aa(R)
+        
+        for row in range(3):
+            for col in range(3):
+                for k in range(3):
+                    target_rotation_matrix[row][col] += R_tilt[row][k] * starting_rotation_matrix[k][col]
+        
+        # Convert target rotation matrix to axis-angle for UR
+        rx, ry, rz = _mat_to_aa(target_rotation_matrix)
         pts.append([x0, y0, z0, rx, ry, rz])
 
     # Assemble URScript program
@@ -561,3 +598,162 @@ def wait_until_idle(robot: urx.Robot, eps_rad: float = 0.005, stable_time: float
             return
         last = cur
         time.sleep(poll)
+
+
+# -----------------------------------------------------------------------------
+# Spiral Cold Spray Function
+# -----------------------------------------------------------------------------
+
+def spiral_cold_spray(
+    robot: urx.Robot,
+    *,
+    tilt_start_deg: float,
+    tilt_end_deg: float,
+    revs: float,
+    r_start_mm: float,
+    r_end_mm: float,
+    steps_per_rev: int,
+    cycle_s: float,
+    lookahead_s: float,
+    gain: int,
+    sing_tol_deg: float,
+    phase_offset_deg: float = 0.0,
+    cycle_s_start: float = None,
+    cycle_s_end: float = None,
+    invert_tilt: bool = False,
+):
+    """Generate a radius-scheduled spiral and execute with servoj.
+
+    - Uses current TCP XYZ as spiral center and current orientation as starting reference.
+    - Keeps the singularity avoidance by skipping phases near 90°/270°.
+    - Creates orientations with linearly varying angle from starting normal direction:
+      tool X-axis angle varies linearly from tilt_start → tilt_end degrees.
+    - If cycle_s_start and cycle_s_end are provided, interpolates cycle time
+      from start to end over the whole spiral. Otherwise uses fixed cycle_s.
+    - If invert_tilt is True, negates both tilt angles to flip the tilt direction.
+    """
+    # Get current TCP pose and orientation as starting reference
+    current_pose = get_tcp_pose(robot)
+    x0, y0, z0 = current_pose[0], current_pose[1], current_pose[2]
+    starting_rx, starting_ry, starting_rz = current_pose[3], current_pose[4], current_pose[5]
+    
+    # Convert starting orientation to rotation matrix to get starting normal direction
+    starting_angle_mag = math.sqrt(starting_rx*starting_rx + starting_ry*starting_ry + starting_rz*starting_rz)
+    if starting_angle_mag > 1e-6:
+        # Normalized axis
+        start_ax = starting_rx / starting_angle_mag
+        start_ay = starting_ry / starting_angle_mag  
+        start_az = starting_rz / starting_angle_mag
+        
+        # Rodrigues formula for starting rotation matrix
+        cos_theta = math.cos(starting_angle_mag)
+        sin_theta = math.sin(starting_angle_mag)
+        
+        starting_rotation_matrix = [
+            [cos_theta + start_ax*start_ax*(1-cos_theta), start_ax*start_ay*(1-cos_theta) - start_az*sin_theta, start_ax*start_az*(1-cos_theta) + start_ay*sin_theta],
+            [start_ay*start_ax*(1-cos_theta) + start_az*sin_theta, cos_theta + start_ay*start_ay*(1-cos_theta), start_ay*start_az*(1-cos_theta) - start_ax*sin_theta],
+            [start_az*start_ax*(1-cos_theta) - start_ay*sin_theta, start_az*start_ay*(1-cos_theta) + start_ax*sin_theta, cos_theta + start_az*start_az*(1-cos_theta)]
+        ]
+    else:
+        starting_rotation_matrix = [[1,0,0], [0,1,0], [0,0,1]]  # Identity matrix
+    
+    # Extract starting normal direction (tool X-axis)
+    starting_normal = [starting_rotation_matrix[0][0], starting_rotation_matrix[1][0], starting_rotation_matrix[2][0]]
+
+    # Apply tilt inversion if requested
+    if invert_tilt:
+        tilt_start_deg = -tilt_start_deg
+        tilt_end_deg = -tilt_end_deg
+
+    # Precompute counts
+    total_steps = int(round(revs * steps_per_rev))
+    
+    # Determine if we're using variable cycle timing
+    use_variable_cycle = cycle_s_start is not None and cycle_s_end is not None
+
+    # Build URScript
+    lines: List[str] = ["def spiral_servoj():"]
+
+    for step in range(total_steps + 1):
+        frac = step / total_steps if total_steps else 1.0
+        # Linear schedules
+        tilt = math.radians(tilt_start_deg + (tilt_end_deg - tilt_start_deg) * frac)
+        r_mm = r_start_mm + (r_end_mm - r_start_mm) * frac
+        r = r_mm / 1000.0
+        
+        # Calculate cycle time (variable or fixed)
+        if use_variable_cycle:
+            current_cycle_s = cycle_s_start + (cycle_s_end - cycle_s_start) * frac
+        else:
+            current_cycle_s = cycle_s
+
+        # Phase with optional offset
+        phi_deg = (step / steps_per_rev) * 360.0 + phase_offset_deg
+        phi = math.radians(phi_deg)
+
+        # Skip near 90° and 270° (wrap-safe)
+        ang = (phi_deg % 360.0)
+        if min(abs(((ang - 90) + 180) % 360 - 180),
+               abs(((ang - 270) + 180) % 360 - 180)) < sing_tol_deg:
+            continue
+
+        # Create orientation with linearly varying angle from starting normal direction
+        # Calculate target angle from starting normal (linearly interpolated)
+        current_tilt_angle_rad = math.radians(tilt_start_deg + (tilt_end_deg - tilt_start_deg) * frac)
+        
+        # Create rotation axis perpendicular to starting normal direction
+        # Use spiral phase to create varying rotation axis direction
+        rotation_axis = [
+            0.0,
+            math.cos(phi), 
+            math.sin(phi)
+        ]
+        
+        # Normalize rotation axis
+        axis_mag = math.sqrt(rotation_axis[0]*rotation_axis[0] + rotation_axis[1]*rotation_axis[1] + rotation_axis[2]*rotation_axis[2])
+        if axis_mag > 1e-6:
+            rotation_axis = [rotation_axis[0]/axis_mag, rotation_axis[1]/axis_mag, rotation_axis[2]/axis_mag]
+        else:
+            rotation_axis = [0.0, 1.0, 0.0]  # Default to Y-axis
+        
+        # Create rotation matrix for tilt around rotation_axis using Rodrigues formula
+        cos_tilt = math.cos(current_tilt_angle_rad)
+        sin_tilt = math.sin(current_tilt_angle_rad)
+        ax, ay, az = rotation_axis[0], rotation_axis[1], rotation_axis[2]
+        
+        R_tilt = [
+            [cos_tilt + ax*ax*(1-cos_tilt), ax*ay*(1-cos_tilt) - az*sin_tilt, ax*az*(1-cos_tilt) + ay*sin_tilt],
+            [ay*ax*(1-cos_tilt) + az*sin_tilt, cos_tilt + ay*ay*(1-cos_tilt), ay*az*(1-cos_tilt) - ax*sin_tilt],
+            [az*ax*(1-cos_tilt) - ay*sin_tilt, az*ay*(1-cos_tilt) + ax*sin_tilt, cos_tilt + az*az*(1-cos_tilt)]
+        ]
+        
+        # Apply rotation to starting orientation: target = R_tilt * starting_rotation_matrix
+        target_rotation_matrix = [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0], 
+            [0.0, 0.0, 0.0]
+        ]
+        
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    target_rotation_matrix[i][j] += R_tilt[i][k] * starting_rotation_matrix[k][j]
+        
+        # Convert target rotation matrix to axis-angle for UR
+        rx, ry, rz = _mat_to_aa(target_rotation_matrix)
+
+        # Spiral translation in TCP YZ plane around current center
+        x = x0
+        y = y0 + r * math.cos(phi)
+        z = z0 + r * math.sin(phi)
+
+        pose_str = ", ".join(f"{v:.6f}" for v in [x, y, z, rx, ry, rz])
+        lines.append(
+            f"  servoj(get_inverse_kin(p[{pose_str}]), t={current_cycle_s:.6f}, lookahead_time={lookahead_s}, gain={gain})"
+        )
+        lines.append("  sync()")
+
+    lines.append("end")
+    lines.append("spiral_servoj()")
+
+    send_urscript(robot, "\n".join(lines))

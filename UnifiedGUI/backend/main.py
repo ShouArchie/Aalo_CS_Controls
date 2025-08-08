@@ -103,6 +103,9 @@ class ColdSprayRequest(BaseModel):
 class ConicalSprayRequest(BaseModel):
     spray_paths: str  # JSON string containing list of spray path dictionaries
 
+class SpiralSprayRequest(BaseModel):
+    spiral_params: str  # JSON string containing spiral parameters
+
 # Allow all origins for local setup (laptop-only deployment)
 app.add_middleware(
     CORSMiddleware,
@@ -885,6 +888,39 @@ async def execute_conical_spray_paths(request: ConicalSprayRequest):
         return {"success": False, "error": "Invalid JSON format for spray paths"}
     except Exception as e:
         return {"success": False, "error": f"Failed to parse spray paths: {str(e)}"}
+
+
+@app.post("/api/robot/spiral-spray")
+async def execute_spiral_spray(request: SpiralSprayRequest):
+    """Execute spiral spray pattern with linearly varying tilt angle."""
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    try:
+        import json
+        spiral_params = json.loads(request.spiral_params)
+        
+        # Validate spiral parameters
+        required_fields = ['tilt_start_deg', 'tilt_end_deg', 'revs', 'r_start_mm', 'r_end_mm', 'steps_per_rev', 'cycle_s', 'lookahead_s', 'gain', 'sing_tol_deg']
+        for field in required_fields:
+            if field not in spiral_params:
+                return {"success": False, "error": f"Missing required field: {field}"}
+            if not isinstance(spiral_params[field], (int, float)):
+                return {"success": False, "error": f"Field {field} must be numeric"}
+        
+        # Optional parameters with defaults
+        spiral_params.setdefault('phase_offset_deg', 0.0)
+        spiral_params.setdefault('cycle_s_start', None)
+        spiral_params.setdefault('cycle_s_end', None) 
+        spiral_params.setdefault('invert_tilt', False)
+        
+        result = robot_controller.execute_spiral_spray(spiral_params)
+        return result
+        
+    except json.JSONDecodeError:
+        return {"success": False, "error": "Invalid JSON format for spiral parameters"}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to parse spiral parameters: {str(e)}"}
 
 
 # Server configuration for network access

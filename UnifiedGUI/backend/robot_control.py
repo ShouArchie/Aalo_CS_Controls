@@ -805,6 +805,70 @@ blended_spray()
         except Exception as e:
             print(f"❌ Background conical spray error: {e}")
 
+    def execute_spiral_spray(self, spiral_params: dict) -> dict:
+        """Execute spiral spray pattern in background thread"""
+        try:
+            if not self.connected or not self.robot_controller:
+                return {"success": False, "error": "Robot not connected"}
+            
+            if rf is None:
+                return {"success": False, "error": "robot_functions module not available"}
+            
+            # Start execution in background thread to keep camera streaming
+            spiral_thread = threading.Thread(
+                target=self._execute_spiral_spray_background,
+                args=(spiral_params,),
+                daemon=True
+            )
+            spiral_thread.start()
+            
+            return {
+                "success": True,
+                "message": f"Started spiral spray pattern in background - camera will continue streaming",
+                "params": spiral_params
+            }
+            
+        except Exception as e:
+            print(f"❌ Spiral spray error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def _execute_spiral_spray_background(self, spiral_params: dict):
+        """Background execution of spiral spray pattern"""
+        try:
+            print(f"🌀 Executing spiral spray pattern in background thread")
+            print(f"   ↳ Tilt: {spiral_params['tilt_start_deg']}° → {spiral_params['tilt_end_deg']}°")
+            print(f"   ↳ Revolutions: {spiral_params['revs']}")
+            print(f"   ↳ Radius: {spiral_params['r_start_mm']}mm → {spiral_params['r_end_mm']}mm")
+            print(f"   ↳ Cycle time: {spiral_params['cycle_s']}s")
+            
+            # Execute spiral motion using the new spiral_cold_spray function
+            rf.spiral_cold_spray(
+                self.robot_controller.robot,
+                tilt_start_deg=spiral_params['tilt_start_deg'],
+                tilt_end_deg=spiral_params['tilt_end_deg'],
+                revs=spiral_params['revs'],
+                r_start_mm=spiral_params['r_start_mm'],
+                r_end_mm=spiral_params['r_end_mm'],
+                steps_per_rev=spiral_params['steps_per_rev'],
+                cycle_s=spiral_params['cycle_s'],
+                lookahead_s=spiral_params['lookahead_s'],
+                gain=spiral_params['gain'],
+                sing_tol_deg=spiral_params['sing_tol_deg'],
+                phase_offset_deg=spiral_params.get('phase_offset_deg', 0.0),
+                cycle_s_start=spiral_params.get('cycle_s_start'),
+                cycle_s_end=spiral_params.get('cycle_s_end'),
+                invert_tilt=spiral_params.get('invert_tilt', False)
+            )
+            
+            # Wait for completion
+            time.sleep(1.5)
+            rf.wait_until_idle(self.robot_controller.robot)
+            
+            print(f"🎯 Spiral spray pattern completed successfully!")
+            
+        except Exception as e:
+            print(f"❌ Background spiral spray error: {e}")
+
     def get_status(self) -> dict:
         """Get current robot status"""
         try:
