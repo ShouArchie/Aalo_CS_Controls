@@ -37,39 +37,37 @@ export default function CameraPanel({
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
-    // Calculate the actual image dimensions within the canvas (accounting for object-fit: contain)
+    // figure out actual image size within canvas (object-fit: contain)
     const imageAspectRatio = canvas.width / canvas.height;
     const canvasAspectRatio = rect.width / rect.height;
     
     let imageDisplayWidth, imageDisplayHeight, offsetX, offsetY;
     
     if (imageAspectRatio > canvasAspectRatio) {
-      // Image is wider - letterboxed top/bottom
+      // wider image - letterboxed top/bottom
       imageDisplayWidth = rect.width;
       imageDisplayHeight = rect.width / imageAspectRatio;
       offsetX = 0;
       offsetY = (rect.height - imageDisplayHeight) / 2;
     } else {
-      // Image is taller - letterboxed left/right
+      // taller image - letterboxed left/right
       imageDisplayWidth = rect.height * imageAspectRatio;
       imageDisplayHeight = rect.height;
       offsetX = (rect.width - imageDisplayWidth) / 2;
       offsetY = 0;
     }
     
-    // Calculate click position relative to the actual image
+    // click position relative to actual image
     const clickX = event.clientX - rect.left - offsetX;
     const clickY = event.clientY - rect.top - offsetY;
     
-    // Convert to image coordinates
     const displayX = Math.floor((clickX / imageDisplayWidth) * canvas.width);
     const displayY = Math.floor((clickY / imageDisplayHeight) * canvas.height);
     
-    // Only process clicks within the image bounds
+    // ignore clicks outside image
     if (displayX < 0 || displayX >= canvas.width || displayY < 0 || displayY >= canvas.height) return;
     
-    // Account for 180-degree rotation applied in backend
-    // The displayed image is rotated, so we need to transform coordinates back to original orientation
+    // backend rotates image 180 degrees, so we need to transform coordinates back
     const x = canvas.width - displayX - 1;
     const y = canvas.height - displayY - 1;
     
@@ -84,7 +82,7 @@ export default function CameraPanel({
     }
   }, [isThermal, canvasRef]);
 
-  // Fetch min/max data periodically for thermal camera
+  // get min/max temp data every 2 seconds
   useEffect(() => {
     if (!isThermal) return;
     
@@ -118,7 +116,7 @@ export default function CameraPanel({
         </div>
       </div>
 
-      {/* Camera Display - Takes remaining space */}
+      {/* Camera Display */}
       <div className="relative bg-surface-dark rounded overflow-hidden flex-1">
         <canvas 
           ref={canvasRef} 
@@ -127,7 +125,6 @@ export default function CameraPanel({
           style={{ objectFit: 'contain' }}
         />
         
-
 
         {/* Temperature Data Overlay */}
         {isThermal && (
@@ -165,7 +162,7 @@ export default function CameraPanel({
         </div>
       </div>
 
-      {/* Technical Readout */}
+      {/* filter range display */}
       {isThermal && filterEnabled && (
         <div className="text-xs font-mono text-text-secondary">
           FILTER RANGE: {tempRange.min}°C → {tempRange.max}°C

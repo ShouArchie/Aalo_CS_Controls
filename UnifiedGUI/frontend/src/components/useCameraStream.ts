@@ -16,9 +16,9 @@ export function useCameraStream(url: string) {
     let isProcessing = false;
     let lastFrameUrl: string | null = null;
 
-    // Frame processing queue for smooth playback
+    // frame queue for smooth playback
     const frameQueue: ArrayBuffer[] = [];
-    const MAX_QUEUE_SIZE = 2; // Keep only latest frames for low latency
+    const MAX_QUEUE_SIZE = 2; // keep only latest frames for low latency
 
     socket.binaryType = 'arraybuffer';
 
@@ -27,7 +27,7 @@ export function useCameraStream(url: string) {
         isProcessing = true;
         const frameData = frameQueue.shift()!;
         
-        // Clear queue if too many frames are buffered (reduce latency)
+        // clear old frames to reduce latency
         if (frameQueue.length > MAX_QUEUE_SIZE) {
           frameQueue.splice(0, frameQueue.length - 1);
         }
@@ -36,17 +36,17 @@ export function useCameraStream(url: string) {
         const img = new Image();
         
         img.onload = () => {
-          // Set canvas size only when needed
+          // resize canvas if needed
           if (canvas.width !== img.width || canvas.height !== img.height) {
             canvas.width = img.width;
             canvas.height = img.height;
           }
           
-          // Clear canvas and draw new frame
+          // draw new frame
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(img, 0, 0);
           
-          // Calculate FPS
+          // calc fps
           frames += 1;
           const now = performance.now();
           if (now - lastTime >= 1000) {
@@ -55,7 +55,7 @@ export function useCameraStream(url: string) {
             lastTime = now;
           }
           
-          // Clean up previous frame URL
+          // cleanup old url
           if (lastFrameUrl) {
             URL.revokeObjectURL(lastFrameUrl);
           }
@@ -63,7 +63,7 @@ export function useCameraStream(url: string) {
           
           isProcessing = false;
           
-          // Process next frame if available
+          // process next frame if available
           if (frameQueue.length > 0) {
             requestAnimationFrame(processFrame);
           }
@@ -74,7 +74,7 @@ export function useCameraStream(url: string) {
             URL.revokeObjectURL(lastFrameUrl);
           }
           isProcessing = false;
-          // Process next frame on error
+          // try next frame on error
           if (frameQueue.length > 0) {
             requestAnimationFrame(processFrame);
           }
@@ -85,7 +85,7 @@ export function useCameraStream(url: string) {
     };
 
     socket.onmessage = (ev) => {
-      // Add to queue and start processing if needed
+      // add to queue and start processing
       frameQueue.push(ev.data);
       if (!isProcessing) {
         requestAnimationFrame(processFrame);
@@ -106,7 +106,7 @@ export function useCameraStream(url: string) {
 
     return () => {
       socket?.close();
-      // Clean up any remaining frame URLs
+      // cleanup frame urls
       if (lastFrameUrl) {
         URL.revokeObjectURL(lastFrameUrl);
       }

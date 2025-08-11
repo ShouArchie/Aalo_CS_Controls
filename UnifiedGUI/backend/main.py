@@ -186,6 +186,9 @@ class CameraStream:
             
             ret, frame = self.cap.read()
             if ret:
+                # Flip RGB camera vertically
+                # frame = cv2.flip(frame)
+                
                 # Non-blocking queue put - drop frames if encoding can't keep up
                 try:
                     self.frame_queue.put_nowait(frame)
@@ -226,7 +229,7 @@ class CameraStream:
         return self.frame_bytes
 
     def get_fps(self) -> float:
-        """Calculate actual FPS."""
+        # Actual FPS
         if self.last_frame_time == 0:
             return 0
         return 1.0 / max(0.001, time.time() - self.last_frame_time)
@@ -234,41 +237,28 @@ class CameraStream:
     def stop(self):
         self.running = False
         
-        # Join threads with timeout
         for thread in [self.capture_thread, self.encode_thread]:
             if thread and thread.is_alive():
                 thread.join(timeout=1)
         
-        # Release camera
         if self.cap:
             self.cap.release()
 
-
-# ------------------------------------------------------------------
-# Fallback OpenCV thermal stream with colormap processing
-# ------------------------------------------------------------------
-
-
 class RawThermalStream(CameraStream):
-    """Capture from a plain UVC thermal camera and apply false-color colormap."""
-
     def __init__(self, index: int = 2, target_fps: int = 25):
         super().__init__(index=index, target_fps=target_fps, priority="high")
 
     def _encode_loop(self):
-        """Override encoding loop for thermal colormap processing."""
         while self.running:
             try:
                 # Get frame with timeout
                 frame = self.frame_queue.get(timeout=0.1)
                 
-                # Convert to grayscale (assume 8-bit or choose one channel)
                 if len(frame.shape) == 3 and frame.shape[2] == 3:
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 else:
                     gray = frame
 
-                # Normalize and apply colormap
                 norm = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
                 color = cv2.applyColorMap(norm.astype('uint8'), cv2.COLORMAP_INFERNO)
 
@@ -284,14 +274,9 @@ class RawThermalStream(CameraStream):
                 time.sleep(0.01)
 
 
-# ------------------------------------------------------------------
-# HT301 thermal stream wrapper
-# ------------------------------------------------------------------
 
 
 class HT301Stream:
-    """High-performance HT301 thermal camera stream with optimized threading."""
-
     def __init__(self, target_fps: int = 15):
         if ThermalCameraCapture is None:
             raise RuntimeError("ThermalCameraCapture module not available")
@@ -304,11 +289,9 @@ class HT301Stream:
         self.capture_thread: threading.Thread | None = None
         self.encode_thread: threading.Thread | None = None
         
-        # Frame queue for decoupling capture and encoding
         self.frame_queue = queue.Queue(maxsize=2)
         self.last_frame_time = 0
         
-        # High quality JPEG for thermal data
         self.jpeg_params = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
 
     def start(self):
@@ -319,7 +302,6 @@ class HT301Stream:
 
         self.running = True
         
-        # Separate threads for better performance
         self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
         self.encode_thread = threading.Thread(target=self._encode_loop, daemon=True)
         
@@ -327,41 +309,34 @@ class HT301Stream:
         self.encode_thread.start()
 
     def _capture_loop(self):
-        """High-priority thermal capture loop."""
         target_interval = 1.0 / max(self.target_fps, 1)
         while self.running:
             start_time = time.time()
             
             frame = self.capture.get_latest_frame()
             if frame is not None:
-                # Non-blocking queue put
                 try:
                     self.frame_queue.put_nowait(frame)
                 except queue.Full:
-                    # Drop oldest frame and add new one
                     try:
                         self.frame_queue.get_nowait()
                         self.frame_queue.put_nowait(frame)
                     except queue.Empty:
                         pass
             
-            # Precise timing control
             elapsed = time.time() - start_time
             sleep_time = max(0, target_interval - elapsed)
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
     def _encode_loop(self):
-        """Encoding loop for thermal frames."""
         while self.running:
             try:
                 # Get frame with timeout
                 frame = self.frame_queue.get(timeout=0.1)
                 
-                # frame is RGB; convert to BGR for JPEG encoding
                 bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                 
-                # Rotate thermal camera view by 180 degrees
                 rotated = cv2.rotate(bgr, cv2.ROTATE_180)
                 
                 ok, jpg = cv2.imencode('.jpg', rotated, self.jpeg_params)
@@ -379,7 +354,6 @@ class HT301Stream:
         return self.frame_bytes
 
     def get_fps(self) -> float:
-        """Calculate actual FPS."""
         if self.last_frame_time == 0:
             return 0
         return 1.0 / max(0.001, time.time() - self.last_frame_time)
@@ -387,7 +361,6 @@ class HT301Stream:
     def stop(self):
         self.running = False
         
-        # Join threads with timeout
         for thread in [self.capture_thread, self.encode_thread]:
             if thread and thread.is_alive():
                 thread.join(timeout=1)
@@ -399,9 +372,7 @@ class HT301Stream:
                 pass
 
 
-# Instantiate streams AFTER class definitions
 
-# RGB stream (try index 1 then 0)
 def _init_rgb() -> CameraStream | None:
     for idx in (1, 0, 2):
         try:
@@ -414,12 +385,9 @@ def _init_rgb() -> CameraStream | None:
     return None
 
 
-# Initialize RGB camera with retry mechanism
 def init_rgb_camera_with_retry(max_attempts=1) -> CameraStream | None:
-    """Initialize RGB camera with retry mechanism."""
     print(f"🔄 Attempting to initialize RGB camera (max {max_attempts} attempts)...")
     
-    # Try different indices and frame rates
     configs = [
         (1, 60, "high"),  # Preferred: index 1, 60fps, high priority
         (1, 30, "high"),  # Fallback: index 1, 30fps, high priority
@@ -449,12 +417,9 @@ def init_rgb_camera_with_retry(max_attempts=1) -> CameraStream | None:
 
 rgb_stream = init_rgb_camera_with_retry(max_attempts=1)
 
-# Initialize thermal camera with retry mechanism  
 def init_thermal_camera_with_retry(max_attempts=1) -> HT301Stream | CameraStream | None:
-    """Initialize thermal camera with retry mechanism."""
     print(f"🔄 Attempting to initialize thermal camera (max {max_attempts} attempts)...")
     
-    # Try different configurations
     configs = [
         ("HT301", 60),    # Preferred: HT301 at 60fps
         ("HT301", 30),    # Fallback: HT301 at 30fps 
@@ -491,10 +456,8 @@ def init_thermal_camera_with_retry(max_attempts=1) -> HT301Stream | CameraStream
 
 thermal_stream = init_thermal_camera_with_retry(max_attempts=1)
 
-# Start streams ensured above; collect running list for shutdown
 running_streams = [s for s in (rgb_stream, thermal_stream) if s]
 
-# Print startup summary
 print("\n" + "="*60)
 print("🚀 UNIFIED GUI BACKEND STARTUP SUMMARY")
 print("="*60)
@@ -528,7 +491,6 @@ async def get_system_status():
 
 
 async def _frame_sender(websocket: WebSocket, stream: CameraStream | HT301Stream):
-    """High-performance frame sender optimized for minimal latency."""
     await websocket.accept()
     try:
         last_frame = None
@@ -538,12 +500,10 @@ async def _frame_sender(websocket: WebSocket, stream: CameraStream | HT301Stream
         while True:
             frame = stream.latest()
             if frame and frame != last_frame:
-                # Only send new frames to reduce bandwidth
                 await websocket.send_bytes(frame)
                 last_frame = frame
                 frame_count += 1
                 
-                # Log performance every 100 frames
                 if frame_count % 100 == 0:
                     elapsed = time.time() - start_time
                     actual_fps = frame_count / elapsed
@@ -551,7 +511,6 @@ async def _frame_sender(websocket: WebSocket, stream: CameraStream | HT301Stream
                     frame_count = 0
                     start_time = time.time()
             
-            # Minimal sleep for high-frequency updates
             await asyncio.sleep(0.005)  # 200 Hz check rate
     except WebSocketDisconnect:
         print("WebSocket client disconnected")
@@ -581,7 +540,7 @@ async def ws_thermal(websocket: WebSocket):
     await _frame_sender(websocket, thermal_stream)
 
 
-# Graceful shutdown for camera resources
+# shutdown for camera resources
 @app.on_event("shutdown")
 async def shutdown_event():
     for stream in running_streams:
@@ -674,7 +633,6 @@ async def manual_calibration():
 
 @app.post("/api/robot/connect")
 async def connect_robot(request: RobotConnectionRequest):
-    """Connect to UR10e robot at specified IP address."""
     if robot_controller is None:
         return {"connected": False, "error": "Robot controller not available"}
     
@@ -683,7 +641,6 @@ async def connect_robot(request: RobotConnectionRequest):
 
 @app.post("/api/robot/disconnect")
 async def disconnect_robot():
-    """Disconnect from UR10e robot."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -692,7 +649,6 @@ async def disconnect_robot():
 
 @app.post("/api/robot/home")
 async def move_robot_home(request: HomeRequest):
-    """Move robot to home position."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -701,7 +657,6 @@ async def move_robot_home(request: HomeRequest):
 
 @app.post("/api/robot/move")
 async def move_robot_manual(request: RobotMoveRequest):
-    """Manual robot movement in specified direction using speedl tool coordinates."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -710,7 +665,6 @@ async def move_robot_manual(request: RobotMoveRequest):
 
 @app.post("/api/robot/stop")
 async def stop_robot_movement():
-    """Stop all robot movement."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -719,7 +673,6 @@ async def stop_robot_movement():
 
 @app.post("/api/robot/thermal-tracking")
 async def toggle_thermal_tracking(request: ThermalTrackingRequest):
-    """Toggle thermal tracking on/off."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -732,7 +685,6 @@ async def toggle_thermal_tracking(request: ThermalTrackingRequest):
 
 @app.get("/api/robot/status")
 async def get_robot_status():
-    """Get current robot status and position."""
     if robot_controller is None:
         return {
             "connected": False,
@@ -747,7 +699,6 @@ async def get_robot_status():
 
 @app.post("/api/robot/home-joints")
 async def move_robot_home_joints(request: HomeJointsRequest):
-    """Move robot to specific joint angles (home joints)."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -756,7 +707,6 @@ async def move_robot_home_joints(request: HomeJointsRequest):
 
 @app.post("/api/robot/config/home-joints")
 async def update_home_joints_config(request: HomeJointsRequest):
-    """Update the home joints configuration."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -765,7 +715,6 @@ async def update_home_joints_config(request: HomeJointsRequest):
 
 @app.get("/api/robot/current-joints")
 async def get_current_joint_angles():
-    """Get current joint angles from the robot."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -774,7 +723,6 @@ async def get_current_joint_angles():
 
 @app.post("/api/robot/config/save-current-as-home")
 async def save_current_joints_as_home():
-    """Save current joint angles as the new home position."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -783,7 +731,6 @@ async def save_current_joints_as_home():
 
 @app.post("/api/robot/move-fine")
 async def move_robot_fine(request: FineMovementRequest):
-    """Fine robot movement in TCP coordinates (precise positioning)."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -792,7 +739,6 @@ async def move_robot_fine(request: FineMovementRequest):
 
 @app.post("/api/robot/config/step-size")
 async def set_fine_step_size(request: StepSizeRequest):
-    """Set the fine movement step size."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -801,7 +747,6 @@ async def set_fine_step_size(request: StepSizeRequest):
 
 @app.post("/api/robot/move-rotation")
 async def move_robot_rotation(request: RotationRequest):
-    """Fine robot rotation in TCP coordinates (Rx, Ry, Rz)."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -812,7 +757,6 @@ async def move_robot_rotation(request: RotationRequest):
 
 @app.post("/api/robot/set-tcp")
 async def set_robot_tcp(request: TCPRequest):
-    """Set the TCP (Tool Center Point) offset for the robot."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -821,7 +765,6 @@ async def set_robot_tcp(request: TCPRequest):
 
 @app.get("/api/robot/get-tcp")
 async def get_robot_tcp():
-    """Get the current TCP offset."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -830,7 +773,6 @@ async def get_robot_tcp():
 
 @app.get("/api/robot/tcp-position")
 async def get_tcp_position():
-    """Get the current TCP position and orientation."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -839,7 +781,6 @@ async def get_tcp_position():
 
 @app.post("/api/robot/cold-spray")
 async def execute_cold_spray_pattern(request: ColdSprayRequest):
-    """Execute the blended spray pattern with forward/reverse cycles and custom parameters."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -853,7 +794,6 @@ async def execute_cold_spray_pattern(request: ColdSprayRequest):
 
 @app.post("/api/robot/align-tool")
 async def execute_tool_alignment():
-    """Execute tool alignment for cold spray pattern (20mm Y translation + 13.5° Y rotation)."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -862,7 +802,6 @@ async def execute_tool_alignment():
 
 @app.post("/api/robot/conical-spray")
 async def execute_conical_spray_paths(request: ConicalSprayRequest):
-    """Execute 1-4 conical spray paths like spray_test_V2."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -870,11 +809,9 @@ async def execute_conical_spray_paths(request: ConicalSprayRequest):
         import json
         spray_paths = json.loads(request.spray_paths)
         
-        # Validate spray paths
         if not isinstance(spray_paths, list) or len(spray_paths) == 0 or len(spray_paths) > 4:
             return {"success": False, "error": "Must provide 1-4 spray paths"}
         
-        # Validate each path has required fields
         for i, path in enumerate(spray_paths):
             if not all(key in path for key in ['tilt', 'rev', 'cycle']):
                 return {"success": False, "error": f"Path {i+1} missing required fields (tilt, rev, cycle)"}
@@ -892,7 +829,6 @@ async def execute_conical_spray_paths(request: ConicalSprayRequest):
 
 @app.post("/api/robot/spiral-spray")
 async def execute_spiral_spray(request: SpiralSprayRequest):
-    """Execute spiral spray pattern with linearly varying tilt angle."""
     if robot_controller is None:
         return {"success": False, "error": "Robot controller not available"}
     
@@ -900,7 +836,6 @@ async def execute_spiral_spray(request: SpiralSprayRequest):
         import json
         spiral_params = json.loads(request.spiral_params)
         
-        # Validate spiral parameters
         required_fields = ['tilt_start_deg', 'tilt_end_deg', 'revs', 'r_start_mm', 'r_end_mm', 'steps_per_rev', 'cycle_s', 'lookahead_s', 'gain', 'sing_tol_deg']
         for field in required_fields:
             if field not in spiral_params:
@@ -908,7 +843,6 @@ async def execute_spiral_spray(request: SpiralSprayRequest):
             if not isinstance(spiral_params[field], (int, float)):
                 return {"success": False, "error": f"Field {field} must be numeric"}
         
-        # Optional parameters with defaults
         spiral_params.setdefault('phase_offset_deg', 0.0)
         spiral_params.setdefault('cycle_s_start', None)
         spiral_params.setdefault('cycle_s_end', None) 
@@ -923,12 +857,10 @@ async def execute_spiral_spray(request: SpiralSprayRequest):
         return {"success": False, "error": f"Failed to parse spiral parameters: {str(e)}"}
 
 
-# Server configuration for network access
 if __name__ == "__main__":
     import uvicorn
     import socket
     
-    # Get the local IP address
     hostname = socket.gethostname()
     local_ip = socket.gethostbyname(hostname)
     
@@ -945,9 +877,8 @@ if __name__ == "__main__":
     print("   Example: Change 'localhost:8000' to f'{local_ip}:8000' in frontend")
     print("="*70 + "\n")
     
-    # Start server with network access (bind to 0.0.0.0)
     uvicorn.run(
-        app,  # Pass the app object directly
+        app,  
         host="0.0.0.0",  # Listen on all network interfaces
         port=8000,
         reload=False,  # Disable reload in production

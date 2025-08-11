@@ -637,6 +637,10 @@ def spiral_cold_spray(
     x0, y0, z0 = current_pose[0], current_pose[1], current_pose[2]
     starting_rx, starting_ry, starting_rz = current_pose[3], current_pose[4], current_pose[5]
     
+    # Store starting joint angles for reliable return movement
+    starting_joints = robot.getj()
+    starting_joints_str = f"[{starting_joints[0]:.6f}, {starting_joints[1]:.6f}, {starting_joints[2]:.6f}, {starting_joints[3]:.6f}, {starting_joints[4]:.6f}, {starting_joints[5]:.6f}]"
+    
     # Convert starting orientation to rotation matrix to get starting normal direction
     starting_angle_mag = math.sqrt(starting_rx*starting_rx + starting_ry*starting_ry + starting_rz*starting_rz)
     if starting_angle_mag > 1e-6:
@@ -753,7 +757,14 @@ def spiral_cold_spray(
         )
         lines.append("  sync()")
 
+
+    lines.append("# Return to starting joint position")
+    lines.append(f"movej({starting_joints_str}, a=1.0, v=1.0)")
+    
     lines.append("end")
+    lines.append("")
     lines.append("spiral_servoj()")
+    lines.append("")
+    
 
     send_urscript(robot, "\n".join(lines))

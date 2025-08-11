@@ -13,35 +13,33 @@ export default function ControlsPage() {
   const router = useRouter();
   const [showSettings, setShowSettings] = useState(false);
   
-  // Robot control states
+  // robot ip, connected, status, position, thermal tracking
   const [robotIp, setRobotIp] = useState('192.168.10.205');
   const [robotConnected, setRobotConnected] = useState(false);
   const [robotStatus, setRobotStatus] = useState('DISCONNECTED');
   const [robotPosition, setRobotPosition] = useState('UNKNOWN');
   const [thermalTracking, setThermalTracking] = useState(false);
   
-  // Home joint configuration (in degrees)
+  // home position joints - these work for our setup
   const [homeJoints, setHomeJoints] = useState([206.06, -66.96, 104.35, 232.93, 269.26, 118.75]);
   const [showJointConfig, setShowJointConfig] = useState(false);
   
-  // Fine movement configuration
+  // movement settings
   const [fineStepSize, setFineStepSize] = useState(1.0);  // mm
   const [fineVelocity, setFineVelocity] = useState(0.1);  // m/s
   const [fineAcceleration, setFineAcceleration] = useState(0.1);  // m/s²
   const [rotationAngle, setRotationAngle] = useState(5.0);  // degrees
   
-  // TCP configuration
   const [selectedTcp, setSelectedTcp] = useState(1);
-  const [customTcp, setCustomTcp] = useState([-278.81, 0, 72, 0, 0, 0]); // [x, y, z, rx, ry, rz]
+  const [customTcp, setCustomTcp] = useState([-275.68, 0, 77.94, 0, 0, 0]); // x,y,z,rx,ry,rz
   
-  // Global speed control
-  const [globalSpeedPercent, setGlobalSpeedPercent] = useState(100);  // 0-100%
-  const [baseSpeed, setBaseSpeed] = useState(0.05);  // Base speed for speedL (m/s)
+  // speed stuff - global multiplier
+  const [globalSpeedPercent, setGlobalSpeedPercent] = useState(100);  
+  const [baseSpeed, setBaseSpeed] = useState(0.05);  // speedL base rate
   
-  // Theme control
   const [isBeachsideTheme, setIsBeachsideTheme] = useState(false);
 
-  // Blended spray pattern configuration
+  // spray pattern settings
   const [coldSprayParams, setColdSprayParams] = useState({
     acceleration: "0.1",
     velocity: "0.1",
@@ -51,34 +49,32 @@ export default function ControlsPage() {
 
   const [toolAligning, setToolAligning] = useState(false);
 
-  // Responsive keystroke detection for WASD
+  // keyboard
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const [activeSpeedLKeys, setActiveSpeedLKeys] = useState<Set<string>>(new Set());
   
 
-
-  // Conical spray paths configuration
   const [conicalSprayPaths, setConicalSprayPaths] = useState("");
   
-  // Spiral spray configuration  
+  // spiral spray params
   const [spiralSprayParams, setSpiralSprayParams] = useState({
-    tilt_start_deg: 15.0,
+    tilt_start_deg: 7.0,
     tilt_end_deg: 1.0,
-    revs: 10.0,
-    r_start_mm: 50.0,
+    revs: 8.0,
+    r_start_mm: 7.0,
     r_end_mm: 0.0,
     steps_per_rev: 120,
-    cycle_s: 0.02,
+    cycle_s: 0.015,
     lookahead_s: 0.1,
     gain: 2800,
     sing_tol_deg: 0.5,
-    invert_tilt: false,
+    invert_tilt: true,
     use_variable_cycle: false,
     cycle_s_start: 0.025,
     cycle_s_end: 0.015
   });
 
-  // Validation for cold spray parameters
+  // check if spray params are valid numbers
   const isValidSprayParams = () => {
     const acc = parseFloat(coldSprayParams.acceleration);
     const vel = parseFloat(coldSprayParams.velocity);
@@ -91,7 +87,7 @@ export default function ControlsPage() {
            !isNaN(iter) && iter > 0;
   };
 
-  // Validation for conical spray paths
+  // make sure conical paths json is valid
   const isValidConicalPaths = () => {
     if (!conicalSprayPaths.trim()) return false;
     
@@ -111,13 +107,14 @@ export default function ControlsPage() {
     }
   };
 
-  // TCP Presets
+  // tcp presets ARCHIE CHECK
   const TCP_PRESETS: Record<number, { name: string; offset: number[] }> = {
-    1: { name: "TCP Offset + 20mm", offset: [-278.81, 0.0, 72, 0.0, 0.0, 0.0] },
-    2: { name: "TCP Center of Pipe + 20mm", offset: [-362.9475, 0.0, 66.65, 0.0, 0.0, 0.0] },
-    3: { name: "TCP Offset + 0mm", offset: [-258.81, 0.0, 66.65, 0.0, 0.0, 0.0] },
-    4: { name: "No TCP (Base)", offset: [0, 0, 0, 0, 0, 0] },
-    5: { name: "Custom TCP", offset: customTcp }
+    1: { name: "TCP Offset + 15mm", offset: [-275.68, 0.0, 77.94, 0.0, 0.0, 0.0] },
+    2: { name: "TCP Offset + 10mm", offset: [-270.68, 0.0, 77.94, 0.0, 0.0, 0.0] },
+    3: { name: "TCP Center of Pipe + 20mm", offset: [-362.9475, 0.0, 77.94, 0.0, 0.0, 0.0] },
+    4: { name: "TCP Offset + 0mm", offset: [-260.861, 0.0, 77.94, 0.0, 0.0, 0.0] },
+    5: { name: "No TCP (Base)", offset: [0, 0, 0, 0, 0, 0] },
+    6: { name: "Custom TCP", offset: customTcp }
   };
 
   // Apply beachside theme to body
@@ -132,7 +129,7 @@ export default function ControlsPage() {
     }
   }, [isBeachsideTheme]);
 
-  // Apply selected TCP when robot connects
+  // auto set tcp when robot connects
   useEffect(() => {
     if (robotConnected && selectedTcp) {
       console.log(`🤖 Robot connected - applying saved TCP ${selectedTcp}`);
@@ -140,12 +137,11 @@ export default function ControlsPage() {
     }
   }, [robotConnected]);
 
-  // Navigation helper
   const navigateTo = (path: string) => {
     router.push(path);
   };
 
-  // Handle speedL movement (WASD/QE) - continuous sending while held
+  // wasd movement intervals
   const speedLIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Handle mouse hold movement - continuous sending while mouse held
@@ -156,29 +152,28 @@ export default function ControlsPage() {
     const speedLKeys = ['w', 's', 'a', 'd', 'q', 'e'];
     const currentSpeedLKeys = new Set([...pressedKeys].filter(key => speedLKeys.includes(key)));
     
-    // Convert sets to sorted arrays for comparison
+    // check if keys actually changed
     const currentArray = [...currentSpeedLKeys].sort();
     const activeArray = [...activeSpeedLKeys].sort();
     
-    // Check if speedL keys actually changed
     const keysChanged = currentArray.length !== activeArray.length || 
                        !currentArray.every((key, index) => key === activeArray[index]);
     
     if (keysChanged) {
-      // Clear any existing interval
+      // stop any existing movement
       if (speedLIntervalRef.current) {
         clearInterval(speedLIntervalRef.current);
         speedLIntervalRef.current = null;
       }
       
       if (currentSpeedLKeys.size === 0) {
-        // No speedL keys pressed, send stop command
+        // no keys pressed, stop robot
         if (activeSpeedLKeys.size > 0) {
           console.log('🛑 Stopping continuous speedL movement');
           stopRobot();
         }
       } else if (robotConnected) {
-        // Start continuous speedL movement for the primary key
+        // start continuous movement for first key pressed
         const primaryKey = [...currentSpeedLKeys][0];
         console.log(`🚀 Starting continuous speedL: ${primaryKey}`);
         
@@ -208,8 +203,8 @@ export default function ControlsPage() {
         // Send initial command immediately
         sendSpeedLCommand();
         
-        // Set up interval to continuously send speedL commands
-        speedLIntervalRef.current = setInterval(sendSpeedLCommand, 150); // Send every 150ms
+        // keep sending commands while key held
+        speedLIntervalRef.current = setInterval(sendSpeedLCommand, 150);
       }
       
       setActiveSpeedLKeys(currentSpeedLKeys);
@@ -219,15 +214,14 @@ export default function ControlsPage() {
   // Handle mouse hold continuous movement
   useEffect(() => {
     if (mouseHoldDirection && robotConnected) {
-      // Send initial command immediately
+      // first move right away
       moveRobot(mouseHoldDirection, 0.1);
       
-      // Set up interval for continuous movement
       mouseHoldIntervalRef.current = setInterval(() => {
         moveRobot(mouseHoldDirection, 0.1);
-      }, 150); // Send every 150ms like WASD
+      }, 150);
     } else {
-      // Clear interval and stop movement
+      // stop moving
       if (mouseHoldIntervalRef.current) {
         clearInterval(mouseHoldIntervalRef.current);
         mouseHoldIntervalRef.current = null;
@@ -266,10 +260,10 @@ export default function ControlsPage() {
       newFineKeys.forEach(key => {
         switch (key) {
           case 'i':
-            moveFine('z+', fineStepSize);
+            moveFine('z-', fineStepSize);
             break;
           case 'k':
-            moveFine('z-', fineStepSize);
+            moveFine('z+', fineStepSize);
             break;
           case 'j':
             moveFine('y+', fineStepSize);
@@ -302,18 +296,18 @@ export default function ControlsPage() {
             moveRotation('rz-', rotationAngle);
             break;
         }
-        // Mark this key as processed
+        // mark as processed so we don't repeat
         processedKeysRef.current.add(key);
       });
     }
     
-    // Remove released keys from processed set
+    // cleanup released keys from processed set
     const currentFineKeys = [...pressedKeys].filter(key => fineMovementKeys.includes(key));
     processedKeysRef.current = new Set([...processedKeysRef.current].filter(key => currentFineKeys.includes(key)));
     
   }, [pressedKeys, robotConnected, fineStepSize, rotationAngle]);
 
-  // Clear pressed keys when robot disconnects
+  // clear keys when robot disconnects
   useEffect(() => {
     if (!robotConnected) {
       setPressedKeys(new Set());
@@ -329,13 +323,21 @@ export default function ControlsPage() {
         event.preventDefault();
         setShowSettings(true);
       }
-      // Spacebar for Emergency Stop (works even when not connected or typing)
+
+      else if (event.ctrlKey && event.key.toLowerCase() === 'h') {
+        event.preventDefault();
+        if (robotConnected) {
+          console.log('🏠 Going to home position via Ctrl+H');
+          moveToHomeJoints();
+        }
+      }
+      // spacebar emergency stop
       else if (event.key === ' ') {
         event.preventDefault();
         console.log('🚨 Emergency Stop triggered by SPACEBAR');
         stopRobot();
       }
-      // WASD robot movement (only when robot is connected and not typing in input)
+      // wasd movement (don't interfere with typing)
       else if (robotConnected && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
         const key = event.key.toLowerCase();
         const movementKeys = ['w', 's', 'a', 'd', 'q', 'e', 'i', 'k', 'j', 'l', 'u', 'o', 'r', 'f', 't', 'g', 'y', 'h'];
@@ -372,7 +374,7 @@ export default function ControlsPage() {
     };
   }, [robotConnected, fineStepSize, globalSpeedPercent, baseSpeed, rotationAngle]);
 
-  // Robot control functions
+  // robot functions
   const connectRobot = async () => {
     try {
       const response = await fetch(API_ENDPOINTS.ROBOT_CONNECT, {
@@ -851,7 +853,7 @@ const executeSpiralSpray = async () => {
               UR-10E Robot Controls
             </h1>
             <div className="text-xs text-text-secondary font-mono">
-              {robotConnected ? 'ROBOT.ONLINE' : 'ROBOT.OFFLINE'} | CONTROL.ACTIVE
+              {robotConnected ? 'ROBOT.ONLINE' : 'ROBOT.OFFLINE'} | ARCHIE_SHOU_WAS_HERE
             </div>
           </div>
           
@@ -1188,10 +1190,10 @@ const executeSpiralSpray = async () => {
                       </SelectTrigger>
                       <SelectContent className="bg-surface-dark border-accent/30">
                         <SelectItem value="1" className="text-sm text-text-primary hover:bg-accent/20">
-                          1: TCP Offset + 20mm (-278.81, 0, 72)
+                          1: TCP Offset + 15mm (-275.68, 0, 77.94)
                         </SelectItem>
                         <SelectItem value="2" className="text-sm text-text-primary hover:bg-accent/20">
-                          2: TCP Center of Pipe + 20mm (-362.9475, 0.0, 60.3)
+                          2: TCP Offset + 10mm (-270.68, 0, 77.94)
                         </SelectItem>
                         <SelectItem value="3" className="text-sm text-text-primary hover:bg-accent/20">
                           3: TCP Offset + 0mm (-258.81, 0.0, 60.3)
@@ -1414,6 +1416,282 @@ const executeSpiralSpray = async () => {
           </div>
         </div>
 
+        {/* Spiral Spray Pattern Controls */}
+        <div className="tactical-panel p-6">
+          <div className="bg-surface-dark p-6 rounded-lg border border-border-tactical">
+            <h3 className="text-lg font-tactical text-accent font-medium">Spiral Spray Pattern</h3>
+            <p className="text-sm text-text-secondary mb-6">Configure spiral motion with linearly varying tilt angle</p>
+            
+            {robotConnected && (
+              <>
+                {/* Spiral Parameters Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  {/* Tilt Start/End */}
+                  <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                    <h4 className="text-sm font-bold text-accent mb-3">Tilt Angles</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Start Tilt (deg)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.tilt_start_deg}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, tilt_start_deg: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">End Tilt (deg)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.tilt_end_deg}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, tilt_end_deg: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                        />
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={spiralSprayParams.invert_tilt}
+                          onCheckedChange={(checked) => setSpiralSprayParams({...spiralSprayParams, invert_tilt: checked})}
+                        />
+                        <label className="text-xs text-text-secondary">Invert Tilt</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Spiral Dimensions */}
+                  <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                    <h4 className="text-sm font-bold text-accent mb-3">Spiral Dimensions</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Revolutions</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.revs}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, revs: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Start Radius (mm)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.r_start_mm}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, r_start_mm: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">End Radius (mm)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.r_end_mm}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, r_end_mm: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Motion Parameters */}
+                  <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                    <h4 className="text-sm font-bold text-accent mb-3">Motion Control</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Steps per Revolution</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.steps_per_rev}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, steps_per_rev: parseInt(e.target.value) || 0})}
+                          className="w-full"
+                          step="1"
+                        />
+                      </div>
+                      
+                      {/* Variable Cycle Time Toggle */}
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={spiralSprayParams.use_variable_cycle}
+                          onCheckedChange={(checked) => setSpiralSprayParams({...spiralSprayParams, use_variable_cycle: checked})}
+                        />
+                        <label className="text-xs text-text-secondary">Variable Cycle Time</label>
+                      </div>
+                      
+                      {!spiralSprayParams.use_variable_cycle ? (
+                        // Fixed cycle time
+                        <div>
+                          <label className="block text-xs text-text-secondary mb-1">Cycle Time (s)</label>
+                          <Input
+                            type="number"
+                            value={spiralSprayParams.cycle_s}
+                            onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s: parseFloat(e.target.value) || 0})}
+                            className="w-full"
+                            step="0.001"
+                          />
+                        </div>
+                      ) : (
+                        // Variable cycle time start/end
+                        <>
+                          <div>
+                            <label className="block text-xs text-text-secondary mb-1">Start Cycle Time (s)</label>
+                            <Input
+                              type="number"
+                              value={spiralSprayParams.cycle_s_start}
+                              onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s_start: parseFloat(e.target.value) || 0})}
+                              className="w-full"
+                              step="0.001"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-text-secondary mb-1">End Cycle Time (s)</label>
+                            <Input
+                              type="number"
+                              value={spiralSprayParams.cycle_s_end}
+                              onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s_end: parseFloat(e.target.value) || 0})}
+                              className="w-full"
+                              step="0.001"
+                            />
+                          </div>
+                        </>
+                      )}
+                      
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Lookahead (s)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.lookahead_s}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, lookahead_s: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Advanced Parameters */}
+                  <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                    <h4 className="text-sm font-bold text-accent mb-3">Advanced</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Gain</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.gain}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, gain: parseInt(e.target.value) || 0})}
+                          className="w-full"
+                          step="100"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Singularity Tolerance (deg)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.sing_tol_deg}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, sing_tol_deg: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-accent mb-3">Quick Presets</h4>
+                  <div className="flex flex-wrap gap-2">
+                    <button 
+                      onClick={() => setSpiralSprayParams({
+                        tilt_start_deg: 15.0, tilt_end_deg: 1.0, revs: 10.0, r_start_mm: 50.0, r_end_mm: 0.0,
+                        steps_per_rev: 120, cycle_s: 0.02, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
+                        use_variable_cycle: false, cycle_s_start: 0.025, cycle_s_end: 0.015
+                      })}
+                      className="tactical-button py-2 px-3 text-sm"
+                    >
+                      Standard
+                    </button>
+                    <button 
+                      onClick={() => setSpiralSprayParams({
+                        tilt_start_deg: 20.0, tilt_end_deg: 5.0, revs: 5.0, r_start_mm: 30.0, r_end_mm: 0.0,
+                        steps_per_rev: 180, cycle_s: 0.015, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
+                        use_variable_cycle: false, cycle_s_start: 0.020, cycle_s_end: 0.010
+                      })}
+                      className="tactical-button py-2 px-3 text-sm"
+                    >
+                      Fast
+                    </button>
+                    <button 
+                      onClick={() => setSpiralSprayParams({
+                        tilt_start_deg: 10.0, tilt_end_deg: 0.5, revs: 15.0, r_start_mm: 75.0, r_end_mm: 0.0,
+                        steps_per_rev: 90, cycle_s: 0.025, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
+                        use_variable_cycle: false, cycle_s_start: 0.030, cycle_s_end: 0.020
+                      })}
+                      className="tactical-button py-2 px-3 text-sm"
+                    >
+                      Large
+                    </button>
+                    <button 
+                      onClick={() => setSpiralSprayParams({
+                        tilt_start_deg: 15.0, tilt_end_deg: 1.0, revs: 10.0, r_start_mm: 50.0, r_end_mm: 0.0,
+                        steps_per_rev: 120, cycle_s: 0.02, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
+                        use_variable_cycle: true, cycle_s_start: 0.025, cycle_s_end: 0.015
+                      })}
+                      className="tactical-button py-2 px-3 text-sm"
+                    >
+                      Variable Speed
+                    </button>
+                  </div>
+                </div>
+
+                {/* Execute Button */}
+                <div className="flex justify-center">
+                  <button
+                    onClick={executeSpiralSpray}
+                    disabled={toolAligning}
+                    className={`tactical-button py-3 px-6 text-base font-bold rounded-lg ${
+                      toolAligning
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700'
+                    }`}
+                  >
+                    🌀 EXECUTE SPIRAL SPRAY
+                  </button>
+                </div>
+
+                {/* Info */}
+                <div className="text-xs text-text-secondary bg-surface-dark/50 p-3 rounded mt-4">
+                  <div className="font-bold text-accent mb-2">Pattern Info:</div>
+                  <div>• <span className="text-orange-400">Total Steps:</span> {Math.round(spiralSprayParams.revs * spiralSprayParams.steps_per_rev)}</div>
+                  {spiralSprayParams.use_variable_cycle ? (
+                    <div>• <span className="text-red-400">Cycle Time:</span> {spiralSprayParams.cycle_s_start}s → {spiralSprayParams.cycle_s_end}s (variable)</div>
+                  ) : (
+                    <div>• <span className="text-red-400">Duration:</span> ~{(spiralSprayParams.revs * spiralSprayParams.steps_per_rev * spiralSprayParams.cycle_s).toFixed(1)}s</div>
+                  )}
+                  <div>• <span className="text-blue-400">Tilt Range:</span> {spiralSprayParams.tilt_start_deg}° → {spiralSprayParams.tilt_end_deg}°</div>
+                  <div>• <span className="text-green-400">Radius:</span> {spiralSprayParams.r_start_mm}mm → {spiralSprayParams.r_end_mm}mm</div>
+                  {spiralSprayParams.invert_tilt && (
+                    <div>• <span className="text-purple-400">Tilt:</span> Inverted direction</div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {!robotConnected && (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-center text-text-secondary">
+                  <div className="text-4xl mb-4">🌀</div>
+                  <div className="text-lg">Robot Not Connected</div>
+                  <div className="text-sm">Connect robot to use spiral spray pattern</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Blended Spray Pattern Controls */}
         <div className="mt-3 bg-black/10 backdrop-blur-sm rounded border border-accent/15 p-3 space-y-3">
           <div className="flex items-center gap-2">
@@ -1618,7 +1896,7 @@ const executeSpiralSpray = async () => {
                 <label className="text-sm text-text-secondary">Quick Examples</label>
                 <div className="flex gap-2 flex-wrap">
                   <button 
-                    onClick={() => setConicalSprayPaths('[{"tilt": 10, "rev": 2, "cycle": 0.015}]')}
+                    onClick={() => setConicalSprayPaths('[{"tilt": 7, "rev": 4, "cycle": 0.015}]')}
                     className="tactical-button py-2 px-3 text-sm"
                   >
                     Single Path
@@ -1684,281 +1962,7 @@ const executeSpiralSpray = async () => {
         </div>
       </div>
 
-      {/* Spiral Spray Pattern Controls */}
-      <div className="tactical-panel p-6">
-        <div className="bg-surface-dark p-6 rounded-lg border border-border-tactical">
-          <h3 className="text-lg font-tactical text-accent font-medium">Spiral Spray Pattern</h3>
-          <p className="text-sm text-text-secondary mb-6">Configure spiral motion with linearly varying tilt angle</p>
-          
-          {robotConnected && (
-            <>
-              {/* Spiral Parameters Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                {/* Tilt Start/End */}
-                <div className="bg-surface-darker p-4 rounded border border-border-tactical">
-                  <h4 className="text-sm font-bold text-accent mb-3">Tilt Angles</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">Start Tilt (deg)</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.tilt_start_deg}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, tilt_start_deg: parseFloat(e.target.value) || 0})}
-                        className="w-full"
-                        step="0.1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">End Tilt (deg)</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.tilt_end_deg}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, tilt_end_deg: parseFloat(e.target.value) || 0})}
-                        className="w-full"
-                        step="0.1"
-                      />
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        checked={spiralSprayParams.invert_tilt}
-                        onCheckedChange={(checked) => setSpiralSprayParams({...spiralSprayParams, invert_tilt: checked})}
-                      />
-                      <label className="text-xs text-text-secondary">Invert Tilt</label>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Spiral Dimensions */}
-                <div className="bg-surface-darker p-4 rounded border border-border-tactical">
-                  <h4 className="text-sm font-bold text-accent mb-3">Spiral Dimensions</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">Revolutions</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.revs}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, revs: parseFloat(e.target.value) || 0})}
-                        className="w-full"
-                        step="0.1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">Start Radius (mm)</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.r_start_mm}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, r_start_mm: parseFloat(e.target.value) || 0})}
-                        className="w-full"
-                        step="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">End Radius (mm)</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.r_end_mm}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, r_end_mm: parseFloat(e.target.value) || 0})}
-                        className="w-full"
-                        step="1"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Motion Parameters */}
-                <div className="bg-surface-darker p-4 rounded border border-border-tactical">
-                  <h4 className="text-sm font-bold text-accent mb-3">Motion Control</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">Steps per Revolution</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.steps_per_rev}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, steps_per_rev: parseInt(e.target.value) || 0})}
-                        className="w-full"
-                        step="1"
-                      />
-                    </div>
-                    
-                    {/* Variable Cycle Time Toggle */}
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        checked={spiralSprayParams.use_variable_cycle}
-                        onCheckedChange={(checked) => setSpiralSprayParams({...spiralSprayParams, use_variable_cycle: checked})}
-                      />
-                      <label className="text-xs text-text-secondary">Variable Cycle Time</label>
-                    </div>
-                    
-                    {!spiralSprayParams.use_variable_cycle ? (
-                      // Fixed cycle time
-                      <div>
-                        <label className="block text-xs text-text-secondary mb-1">Cycle Time (s)</label>
-                        <Input
-                          type="number"
-                          value={spiralSprayParams.cycle_s}
-                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s: parseFloat(e.target.value) || 0})}
-                          className="w-full"
-                          step="0.001"
-                        />
-                      </div>
-                    ) : (
-                      // Variable cycle time start/end
-                      <>
-                        <div>
-                          <label className="block text-xs text-text-secondary mb-1">Start Cycle Time (s)</label>
-                          <Input
-                            type="number"
-                            value={spiralSprayParams.cycle_s_start}
-                            onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s_start: parseFloat(e.target.value) || 0})}
-                            className="w-full"
-                            step="0.001"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-text-secondary mb-1">End Cycle Time (s)</label>
-                          <Input
-                            type="number"
-                            value={spiralSprayParams.cycle_s_end}
-                            onChange={(e) => setSpiralSprayParams({...spiralSprayParams, cycle_s_end: parseFloat(e.target.value) || 0})}
-                            className="w-full"
-                            step="0.001"
-                          />
-                        </div>
-                      </>
-                    )}
-                    
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">Lookahead (s)</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.lookahead_s}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, lookahead_s: parseFloat(e.target.value) || 0})}
-                        className="w-full"
-                        step="0.01"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Advanced Parameters */}
-                <div className="bg-surface-darker p-4 rounded border border-border-tactical">
-                  <h4 className="text-sm font-bold text-accent mb-3">Advanced</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">Gain</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.gain}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, gain: parseInt(e.target.value) || 0})}
-                        className="w-full"
-                        step="100"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-text-secondary mb-1">Singularity Tolerance (deg)</label>
-                      <Input
-                        type="number"
-                        value={spiralSprayParams.sing_tol_deg}
-                        onChange={(e) => setSpiralSprayParams({...spiralSprayParams, sing_tol_deg: parseFloat(e.target.value) || 0})}
-                        className="w-full"
-                        step="0.1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Presets */}
-              <div className="mb-6">
-                <h4 className="text-sm font-bold text-accent mb-3">Quick Presets</h4>
-                <div className="flex flex-wrap gap-2">
-                  <button 
-                    onClick={() => setSpiralSprayParams({
-                      tilt_start_deg: 15.0, tilt_end_deg: 1.0, revs: 10.0, r_start_mm: 50.0, r_end_mm: 0.0,
-                      steps_per_rev: 120, cycle_s: 0.02, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
-                      use_variable_cycle: false, cycle_s_start: 0.025, cycle_s_end: 0.015
-                    })}
-                    className="tactical-button py-2 px-3 text-sm"
-                  >
-                    Standard
-                  </button>
-                  <button 
-                    onClick={() => setSpiralSprayParams({
-                      tilt_start_deg: 20.0, tilt_end_deg: 5.0, revs: 5.0, r_start_mm: 30.0, r_end_mm: 0.0,
-                      steps_per_rev: 180, cycle_s: 0.015, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
-                      use_variable_cycle: false, cycle_s_start: 0.020, cycle_s_end: 0.010
-                    })}
-                    className="tactical-button py-2 px-3 text-sm"
-                  >
-                    Fast
-                  </button>
-                  <button 
-                    onClick={() => setSpiralSprayParams({
-                      tilt_start_deg: 10.0, tilt_end_deg: 0.5, revs: 15.0, r_start_mm: 75.0, r_end_mm: 0.0,
-                      steps_per_rev: 90, cycle_s: 0.025, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
-                      use_variable_cycle: false, cycle_s_start: 0.030, cycle_s_end: 0.020
-                    })}
-                    className="tactical-button py-2 px-3 text-sm"
-                  >
-                    Large
-                  </button>
-                  <button 
-                    onClick={() => setSpiralSprayParams({
-                      tilt_start_deg: 15.0, tilt_end_deg: 1.0, revs: 10.0, r_start_mm: 50.0, r_end_mm: 0.0,
-                      steps_per_rev: 120, cycle_s: 0.02, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
-                      use_variable_cycle: true, cycle_s_start: 0.025, cycle_s_end: 0.015
-                    })}
-                    className="tactical-button py-2 px-3 text-sm"
-                  >
-                    Variable Speed
-                  </button>
-                </div>
-              </div>
-
-              {/* Execute Button */}
-              <div className="flex justify-center">
-                <button
-                  onClick={executeSpiralSpray}
-                  disabled={toolAligning}
-                  className={`tactical-button py-3 px-6 text-base font-bold rounded-lg ${
-                    toolAligning
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700'
-                  }`}
-                >
-                  🌀 EXECUTE SPIRAL SPRAY
-                </button>
-              </div>
-
-              {/* Info */}
-              <div className="text-xs text-text-secondary bg-surface-dark/50 p-3 rounded mt-4">
-                <div className="font-bold text-accent mb-2">Pattern Info:</div>
-                <div>• <span className="text-orange-400">Total Steps:</span> {Math.round(spiralSprayParams.revs * spiralSprayParams.steps_per_rev)}</div>
-                {spiralSprayParams.use_variable_cycle ? (
-                  <div>• <span className="text-red-400">Cycle Time:</span> {spiralSprayParams.cycle_s_start}s → {spiralSprayParams.cycle_s_end}s (variable)</div>
-                ) : (
-                  <div>• <span className="text-red-400">Duration:</span> ~{(spiralSprayParams.revs * spiralSprayParams.steps_per_rev * spiralSprayParams.cycle_s).toFixed(1)}s</div>
-                )}
-                <div>• <span className="text-blue-400">Tilt Range:</span> {spiralSprayParams.tilt_start_deg}° → {spiralSprayParams.tilt_end_deg}°</div>
-                <div>• <span className="text-green-400">Radius:</span> {spiralSprayParams.r_start_mm}mm → {spiralSprayParams.r_end_mm}mm</div>
-                {spiralSprayParams.invert_tilt && (
-                  <div>• <span className="text-purple-400">Tilt:</span> Inverted direction</div>
-                )}
-              </div>
-            </>
-          )}
-
-          {!robotConnected && (
-            <div className="flex items-center justify-center h-32">
-              <div className="text-center text-text-secondary">
-                <div className="text-4xl mb-4">🌀</div>
-                <div className="text-lg">Robot Not Connected</div>
-                <div className="text-sm">Connect robot to use spiral spray pattern</div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
       <SettingsPopup 
         isOpen={showSettings} 

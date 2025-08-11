@@ -21,19 +21,18 @@ export default function JointConfigPopup({
   onSave,
   onSaveCurrentAsHome
 }: JointConfigPopupProps) {
-  // Store as strings to allow empty values during editing
+  // use strings so user can type empty values while editing
   const [localJoints, setLocalJoints] = useState(homeJoints.map(j => j.toString()));
   
-  // State for current robot joint angles
   const [currentRobotJoints, setCurrentRobotJoints] = useState<number[]>([]);
   const [loadingCurrentJoints, setLoadingCurrentJoints] = useState(false);
 
-  // Sync local joints when popup opens with new homeJoints values
+  // sync joints when popup opens
   if (isOpen && localJoints.length !== homeJoints.length) {
     setLocalJoints(homeJoints.map(j => j.toString()));
   }
 
-  // Fetch current robot joint angles when popup opens
+  // get current robot position when opening
   useEffect(() => {
     if (isOpen) {
       fetchCurrentJoints();
@@ -51,15 +50,15 @@ export default function JointConfigPopup({
           setCurrentRobotJoints(result.joints_deg);
         } else {
           console.error('❌ Failed to get current joints:', result.error);
-          setCurrentRobotJoints([]); // Clear on error
+          setCurrentRobotJoints([]);
         }
       } else {
         console.error('❌ HTTP error getting current joints:', response.status);
-        setCurrentRobotJoints([]); // Clear on error
+        setCurrentRobotJoints([]);
       }
     } catch (error) {
       console.error('❌ Failed to fetch current joints:', error);
-      setCurrentRobotJoints([]); // Clear on error
+      setCurrentRobotJoints([]);
     } finally {
       setLoadingCurrentJoints(false);
     }
@@ -67,7 +66,7 @@ export default function JointConfigPopup({
 
   if (!isOpen) return null;
 
-  // Validation: check if all joints are valid numbers
+  // check if all joints have valid numbers
   const areAllJointsValid = () => {
     return localJoints.every(joint => {
       const trimmed = joint.trim();
@@ -76,12 +75,12 @@ export default function JointConfigPopup({
   };
 
   const handleJointChange = (index: number, value: string) => {
-    // Allow empty values and any input during editing
+    // allow empty/partial input while typing
     const newJoints = [...localJoints];
     newJoints[index] = value;
     setLocalJoints(newJoints);
     
-    // Only update parent if all values are valid numbers
+    // only update parent if all values are valid
     const allValid = newJoints.every(joint => {
       const trimmed = joint.trim();
       return trimmed !== '' && !isNaN(parseFloat(trimmed));
@@ -95,7 +94,7 @@ export default function JointConfigPopup({
 
   const handleSave = () => {
     if (areAllJointsValid()) {
-      // Update parent with final numeric values before saving
+      // convert to numbers and save
       const numericJoints = localJoints.map(j => parseFloat(j.trim()));
       onUpdate(numericJoints);
       onSave();
@@ -104,7 +103,7 @@ export default function JointConfigPopup({
   };
 
   const handleCancel = () => {
-    setLocalJoints(homeJoints.map(j => j.toString())); // Reset to original values as strings
+    setLocalJoints(homeJoints.map(j => j.toString())); // reset to original
     onUpdate(homeJoints);
     onClose();
   };
@@ -112,10 +111,7 @@ export default function JointConfigPopup({
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="tactical-panel p-6 max-w-md w-full mx-4 relative">
-        {/* Geometric overlay */}
         <div className="geometric-overlay absolute inset-0 rounded opacity-20"></div>
-        
-        {/* Scanning line effect */}
         <div className="scan-line"></div>
         
         <div className="relative z-10 space-y-4">
@@ -134,7 +130,6 @@ export default function JointConfigPopup({
               Set home joint angles (in degrees). These will be converted to radians for the robot.
             </p>
 
-            {/* Joint input fields */}
             <div className="grid grid-cols-2 gap-3">
               {localJoints.map((joint, index) => (
                 <div key={index} className="space-y-1">
@@ -157,7 +152,7 @@ export default function JointConfigPopup({
               ))}
             </div>
 
-            {/* Current robot values display */}
+            {/* current robot position */}
             <div className="bg-surface-dark/50 p-3 rounded border border-accent/20">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs text-accent font-tactical">Current Robot Position (degrees):</h4>
@@ -188,7 +183,7 @@ export default function JointConfigPopup({
               </div>
             </div>
 
-            {/* Home joint values display */}
+            {/* home joint config */}
             <div className="bg-surface-dark/50 p-3 rounded border border-accent/20">
               <h4 className="text-xs text-accent font-tactical mb-2">Home Joint Configuration (degrees):</h4>
               <div className="grid grid-cols-3 gap-2 text-xs font-mono">
@@ -204,7 +199,7 @@ export default function JointConfigPopup({
               </div>
             </div>
 
-            {/* Validation message */}
+            {/* validation error */}
             {!areAllJointsValid() && (
               <div className="bg-red-900/20 border border-red-500/30 p-2 rounded">
                 <p className="text-xs text-red-400">
@@ -213,7 +208,7 @@ export default function JointConfigPopup({
               </div>
             )}
 
-            {/* Save current position button */}
+            {/* quick save current position */}
             <div className="flex justify-center mb-3">
               <button 
                 onClick={onSaveCurrentAsHome}
@@ -223,7 +218,7 @@ export default function JointConfigPopup({
               </button>
             </div>
 
-            {/* Action buttons */}
+            {/* save/cancel buttons */}
             <div className="flex gap-3">
               <button 
                 onClick={handleCancel}
@@ -244,10 +239,10 @@ export default function JointConfigPopup({
               </button>
             </div>
 
-            {/* Safety note */}
+            {/* safety warning */}
             <div className="bg-warning/10 border border-warning/30 p-2 rounded">
               <p className="text-xs text-warning">
-                ⚠️ Ensure joint angles are within safe operating limits before applying.
+                ⚠️ make sure joint angles are safe before applying
               </p>
             </div>
           </div>
