@@ -717,7 +717,8 @@ blended_spray()
                     cycle_s=cycle_s,
                     lookahead_time=0.1,
                     gain=2800,  
-                    sing_tol_deg=0.5
+                    sing_tol_deg=0.5,
+                    approach_time_s=path.get('approach_time', 0.5) if i == 0 else None
                 )
                 
                 time.sleep(1.5)
@@ -779,7 +780,9 @@ blended_spray()
                 phase_offset_deg=spiral_params.get('phase_offset_deg', 0.0),
                 cycle_s_start=spiral_params.get('cycle_s_start'),
                 cycle_s_end=spiral_params.get('cycle_s_end'),
-                invert_tilt=spiral_params.get('invert_tilt', False)
+                invert_tilt=spiral_params.get('invert_tilt', False),
+                approach_time_s=spiral_params.get('approach_time_s', 0.5),
+                delta_x_mm=spiral_params.get('delta_x_mm', 0.0)
             )
             
             time.sleep(1.5)
@@ -789,6 +792,52 @@ blended_spray()
             
         except Exception as e:
             print(f"❌ Background spiral spray error: {e}")
+
+    def execute_custom_pattern(self, pattern_params: dict) -> dict:
+        try:
+            if not self.robot_controller or not self.robot_controller.robot:
+                return {"success": False, "error": "Robot not connected"}
+
+            print(f"🔧 Starting custom movement pattern...")
+            
+            # Execute in background thread
+            thread = threading.Thread(target=self._execute_custom_pattern_background, args=(pattern_params,))
+            thread.daemon = True
+            thread.start()
+            
+            return {"success": True, "message": "Custom pattern execution started"}
+            
+        except Exception as e:
+            print(f"❌ Custom pattern execution error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def _execute_custom_pattern_background(self, pattern_params: dict):
+        try:
+            print(f"🔧 Executing custom movement pattern in background thread")
+            print(f"   ↳ Initial cycles: {pattern_params['initial_cycles']}")
+            print(f"   ↳ Tilt angle: {pattern_params['tilt_angle_deg']}°")
+            print(f"   ↳ Initial vel/acc: {pattern_params['initial_velocity']}/{pattern_params['initial_acceleration']}")
+            print(f"   ↳ Tilted vel/acc: {pattern_params['tilted_velocity']}/{pattern_params['tilted_acceleration']}")
+            print(f"   ↳ Tilted cycles: {pattern_params['tilted_cycles']}")
+            
+            rf.custom_movement_pattern(
+                self.robot_controller.robot,
+                initial_cycles=pattern_params['initial_cycles'],
+                tilt_angle_deg=pattern_params['tilt_angle_deg'],
+                initial_velocity=pattern_params['initial_velocity'],
+                initial_acceleration=pattern_params['initial_acceleration'],
+                tilted_velocity=pattern_params['tilted_velocity'],
+                tilted_acceleration=pattern_params['tilted_acceleration'],
+                tilted_cycles=pattern_params['tilted_cycles']
+            )
+            
+            time.sleep(1.5)
+            rf.wait_until_idle(self.robot_controller.robot)
+            
+            print(f"🎯 Custom movement pattern completed successfully!")
+            
+        except Exception as e:
+            print(f"❌ Background custom pattern error: {e}")
 
     def get_status(self) -> dict:
         try:

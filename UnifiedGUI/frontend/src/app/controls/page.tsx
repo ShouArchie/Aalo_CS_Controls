@@ -56,6 +56,17 @@ export default function ControlsPage() {
 
   const [conicalSprayPaths, setConicalSprayPaths] = useState("");
   
+  // custom pattern params
+  const [customPatternParams, setCustomPatternParams] = useState({
+    initial_cycles: 8,
+    tilt_angle_deg: 45.0,
+    initial_velocity: 0.75,
+    initial_acceleration: 1.0,
+    tilted_velocity: 0.5,
+    tilted_acceleration: 0.8,
+    tilted_cycles: 5
+  });
+  
   // spiral spray params
   const [spiralSprayParams, setSpiralSprayParams] = useState({
     tilt_start_deg: 7.0,
@@ -71,7 +82,9 @@ export default function ControlsPage() {
     invert_tilt: true,
     use_variable_cycle: false,
     cycle_s_start: 0.025,
-    cycle_s_end: 0.015
+    cycle_s_end: 0.015,
+    approach_time_s: 0.5,
+    delta_x_mm: 0.0
   });
 
   // check if spray params are valid numbers
@@ -95,12 +108,14 @@ export default function ControlsPage() {
       const paths = JSON.parse(conicalSprayPaths);
       if (!Array.isArray(paths) || paths.length === 0 || paths.length > 4) return false;
       
-      return paths.every(path => 
+      return paths.every((path, index) => 
         typeof path === 'object' &&
         'tilt' in path && 'rev' in path && 'cycle' in path &&
         typeof path.tilt === 'number' && 
         typeof path.rev === 'number' && 
-        typeof path.cycle === 'number'
+        typeof path.cycle === 'number' &&
+        // approach_time is optional and only for first path
+        (index > 0 || !('approach_time' in path) || typeof path.approach_time === 'number')
       );
     } catch {
       return false;
@@ -836,6 +851,35 @@ const executeSpiralSpray = async () => {
   }
 };
 
+// Execute custom movement pattern
+const executeCustomPattern = async () => {
+  try {
+    if (!robotConnected) {
+      console.error('Robot not connected');
+      return;
+    }
+
+    console.log(`🔧 Executing custom movement pattern:`, customPatternParams);
+    
+    const response = await fetch(API_ENDPOINTS.ROBOT_CUSTOM_PATTERN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pattern_params: JSON.stringify(customPatternParams)
+      })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      console.log(`✅ Custom pattern executed:`, result.message);
+    } else {
+      console.error('Failed to execute custom pattern:', result.error);
+    }
+  } catch (error) {
+    console.error('Failed to execute custom pattern:', error);
+  }
+};
+
   return (
     <main className="min-h-screen relative overflow-hidden">
       {/* Background Grid */}
@@ -1494,6 +1538,17 @@ const executeSpiralSpray = async () => {
                           step="1"
                         />
                       </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Delta X (mm)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.delta_x_mm}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, delta_x_mm: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="1"
+                          placeholder="X translation over movement"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -1560,6 +1615,18 @@ const executeSpiralSpray = async () => {
                       )}
                       
                       <div>
+                        <label className="block text-xs text-text-secondary mb-1">Approach Time (s)</label>
+                        <Input
+                          type="number"
+                          value={spiralSprayParams.approach_time_s}
+                          onChange={(e) => setSpiralSprayParams({...spiralSprayParams, approach_time_s: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                          placeholder="Time for first movement"
+                        />
+                      </div>
+                      
+                      <div>
                         <label className="block text-xs text-text-secondary mb-1">Lookahead (s)</label>
                         <Input
                           type="number"
@@ -1608,7 +1675,7 @@ const executeSpiralSpray = async () => {
                       onClick={() => setSpiralSprayParams({
                         tilt_start_deg: 15.0, tilt_end_deg: 1.0, revs: 10.0, r_start_mm: 50.0, r_end_mm: 0.0,
                         steps_per_rev: 120, cycle_s: 0.02, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
-                        use_variable_cycle: false, cycle_s_start: 0.025, cycle_s_end: 0.015
+                        use_variable_cycle: false, cycle_s_start: 0.025, cycle_s_end: 0.015, approach_time_s: 0.5, delta_x_mm: 0.0
                       })}
                       className="tactical-button py-2 px-3 text-sm"
                     >
@@ -1618,7 +1685,7 @@ const executeSpiralSpray = async () => {
                       onClick={() => setSpiralSprayParams({
                         tilt_start_deg: 20.0, tilt_end_deg: 5.0, revs: 5.0, r_start_mm: 30.0, r_end_mm: 0.0,
                         steps_per_rev: 180, cycle_s: 0.015, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
-                        use_variable_cycle: false, cycle_s_start: 0.020, cycle_s_end: 0.010
+                        use_variable_cycle: false, cycle_s_start: 0.020, cycle_s_end: 0.010, approach_time_s: 0.5, delta_x_mm: 0.0
                       })}
                       className="tactical-button py-2 px-3 text-sm"
                     >
@@ -1628,7 +1695,7 @@ const executeSpiralSpray = async () => {
                       onClick={() => setSpiralSprayParams({
                         tilt_start_deg: 10.0, tilt_end_deg: 0.5, revs: 15.0, r_start_mm: 75.0, r_end_mm: 0.0,
                         steps_per_rev: 90, cycle_s: 0.025, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
-                        use_variable_cycle: false, cycle_s_start: 0.030, cycle_s_end: 0.020
+                        use_variable_cycle: false, cycle_s_start: 0.030, cycle_s_end: 0.020, approach_time_s: 0.5, delta_x_mm: 0.0
                       })}
                       className="tactical-button py-2 px-3 text-sm"
                     >
@@ -1638,7 +1705,7 @@ const executeSpiralSpray = async () => {
                       onClick={() => setSpiralSprayParams({
                         tilt_start_deg: 15.0, tilt_end_deg: 1.0, revs: 10.0, r_start_mm: 50.0, r_end_mm: 0.0,
                         steps_per_rev: 120, cycle_s: 0.02, lookahead_s: 0.1, gain: 2800, sing_tol_deg: 0.5, invert_tilt: false,
-                        use_variable_cycle: true, cycle_s_start: 0.025, cycle_s_end: 0.015
+                        use_variable_cycle: true, cycle_s_start: 0.025, cycle_s_end: 0.015, approach_time_s: 0.5, delta_x_mm: 0.0
                       })}
                       className="tactical-button py-2 px-3 text-sm"
                     >
@@ -1686,6 +1753,148 @@ const executeSpiralSpray = async () => {
                   <div className="text-4xl mb-4">🌀</div>
                   <div className="text-lg">Robot Not Connected</div>
                   <div className="text-sm">Connect robot to use spiral spray pattern</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Custom Movement Pattern Controls */}
+        <div className="tactical-panel p-6 mt-6">
+          <div className="bg-surface-dark p-6 rounded-lg border border-border-tactical">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="status-indicator bg-purple-500"></div>
+              <h2 className="text-xl font-tactical text-accent">Custom Movement Pattern</h2>
+            </div>
+
+            {robotConnected && (
+              <>
+                {/* Pattern Parameters */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  
+                  {/* Initial Movement Section */}
+                  <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                    <h4 className="text-sm font-bold text-accent mb-3">Initial Movement</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Initial Cycles</label>
+                        <Input
+                          type="number"
+                          value={customPatternParams.initial_cycles}
+                          onChange={(e) => setCustomPatternParams({...customPatternParams, initial_cycles: parseInt(e.target.value) || 0})}
+                          className="w-full"
+                          step="1"
+                          placeholder="Number of Y oscillations"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Initial Velocity (m/s)</label>
+                        <Input
+                          type="number"
+                          value={customPatternParams.initial_velocity}
+                          onChange={(e) => setCustomPatternParams({...customPatternParams, initial_velocity: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Initial Acceleration (m/s²)</label>
+                        <Input
+                          type="number"
+                          value={customPatternParams.initial_acceleration}
+                          onChange={(e) => setCustomPatternParams({...customPatternParams, initial_acceleration: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tilted Movement Section */}
+                  <div className="bg-surface-darker p-4 rounded border border-border-tactical">
+                    <h4 className="text-sm font-bold text-accent mb-3">Tilted Movement</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Tilt Angle (degrees)</label>
+                        <Input
+                          type="number"
+                          value={customPatternParams.tilt_angle_deg}
+                          onChange={(e) => setCustomPatternParams({...customPatternParams, tilt_angle_deg: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="1"
+                          placeholder="TCP Ry tilt angle"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Tilted Velocity (m/s)</label>
+                        <Input
+                          type="number"
+                          value={customPatternParams.tilted_velocity}
+                          onChange={(e) => setCustomPatternParams({...customPatternParams, tilted_velocity: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Tilted Acceleration (m/s²)</label>
+                        <Input
+                          type="number"
+                          value={customPatternParams.tilted_acceleration}
+                          onChange={(e) => setCustomPatternParams({...customPatternParams, tilted_acceleration: parseFloat(e.target.value) || 0})}
+                          className="w-full"
+                          step="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-secondary mb-1">Tilted Cycles</label>
+                        <Input
+                          type="number"
+                          value={customPatternParams.tilted_cycles}
+                          onChange={(e) => setCustomPatternParams({...customPatternParams, tilted_cycles: parseInt(e.target.value) || 0})}
+                          className="w-full"
+                          step="1"
+                          placeholder="Tilted pattern repetitions"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Execute Button */}
+                <div className="flex justify-center mt-6">
+                  <button
+                    onClick={executeCustomPattern}
+                    disabled={toolAligning}
+                    className={`tactical-button py-3 px-6 text-base font-bold rounded-lg ${
+                      toolAligning
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
+                    }`}
+                  >
+                    🔧 EXECUTE CUSTOM PATTERN
+                  </button>
+                </div>
+
+                {/* Pattern Description */}
+                <div className="text-xs text-text-secondary bg-surface-dark/50 p-3 rounded mt-4">
+                  <div className="font-bold text-accent mb-2">Pattern Sequence:</div>
+                  <div>1. Move Z- 3cm, Y+ 3cm</div>
+                  <div>2. Y oscillation: -6cm → +6cm × {customPatternParams.initial_cycles} cycles</div>
+                  <div>3. Move Z- 1mm, TCP tilt +Ry {customPatternParams.tilt_angle_deg}°</div>
+                  <div>4. Adjust TCP center for tilt compensation</div>
+                  <div>5. Tilted cycle pattern × {customPatternParams.tilted_cycles} cycles:</div>
+                  <div>   • Forward: Y+ 6cm → Z- 1mm → Y- 6cm → Z- 1mm</div>
+                  <div>   • Reverse: Z+ 1mm → Y+ 6cm → Z+ 1mm → Y- 6cm (return to start)</div>
+                </div>
+              </>
+            )}
+
+            {!robotConnected && (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-center text-text-secondary">
+                  <div className="text-4xl mb-4">🔧</div>
+                  <div className="text-lg">Robot Not Connected</div>
+                  <div className="text-sm">Connect robot to use custom movement pattern</div>
                 </div>
               </div>
             )}

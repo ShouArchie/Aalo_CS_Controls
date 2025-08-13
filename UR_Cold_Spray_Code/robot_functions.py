@@ -473,6 +473,7 @@ def conical_motion_servoj_script(
     gain: int = 300,
     avoid_singular: bool = True,
     sing_tol_deg: float = 1.0,
+    approach_time_s: float = None,
 ):
     """Generate a conical motion with constant angle from starting orientation.
     
@@ -560,10 +561,12 @@ def conical_motion_servoj_script(
 
     # Assemble URScript program
     lines = ["def cone_servoj():"]
-    for p in pts:
+    for idx, p in enumerate(pts):
         pose_str = ", ".join(f"{v:.6f}" for v in p)
+        # use approach_time_s for first movement if provided, regular cycle_s for others
+        cycle_time_to_use = approach_time_s if (approach_time_s is not None and idx == 0) else cycle_s
         lines.append(
-            f"  servoj(get_inverse_kin(p[{pose_str}]), t={cycle_s}, lookahead_time={lookahead_time}, gain={gain})"
+            f"  servoj(get_inverse_kin(p[{pose_str}]), t={cycle_time_to_use}, lookahead_time={lookahead_time}, gain={gain})"
         )
         lines.append("  sync()")
     lines.append("end")
@@ -621,6 +624,8 @@ def spiral_cold_spray(
     cycle_s_start: float = None,
     cycle_s_end: float = None,
     invert_tilt: bool = False,
+    approach_time_s: float = 0.5,
+    delta_x_mm: float = 0.0,
 ):
     """Generate a radius-scheduled spiral and execute with servoj.
 
@@ -631,6 +636,8 @@ def spiral_cold_spray(
     - If cycle_s_start and cycle_s_end are provided, interpolates cycle time
       from start to end over the whole spiral. Otherwise uses fixed cycle_s.
     - If invert_tilt is True, negates both tilt angles to flip the tilt direction.
+    - If delta_x_mm is provided, the robot will translate linearly in X direction
+      by that amount (in mm) over the course of the entire spiral movement.
     """
     # Get current TCP pose and orientation as starting reference
     current_pose = get_tcp_pose(robot)
@@ -746,14 +753,16 @@ def spiral_cold_spray(
         # Convert target rotation matrix to axis-angle for UR
         rx, ry, rz = _mat_to_aa(target_rotation_matrix)
 
-        # Spiral translation in TCP YZ plane around current center
-        x = x0
+        # Spiral translation in TCP YZ plane around current center, with optional X movement
+        x = x0 + (delta_x_mm / 1000.0) * frac  # interpolate X position from start to start+delta_x_mm
         y = y0 + r * math.cos(phi)
         z = z0 + r * math.sin(phi)
 
         pose_str = ", ".join(f"{v:.6f}" for v in [x, y, z, rx, ry, rz])
+        # use approach_time_s for first movement, regular cycle_s for others
+        cycle_time_to_use = approach_time_s if step == 0 else current_cycle_s
         lines.append(
-            f"  servoj(get_inverse_kin(p[{pose_str}]), t={current_cycle_s:.6f}, lookahead_time={lookahead_s}, gain={gain})"
+            f"  servoj(get_inverse_kin(p[{pose_str}]), t={cycle_time_to_use:.6f}, lookahead_time={lookahead_s}, gain={gain})"
         )
         lines.append("  sync()")
 
@@ -768,3 +777,196 @@ def spiral_cold_spray(
     
 
     send_urscript(robot, "\n".join(lines))
+
+
+# -----------------------------------------------------------------------------
+# Custom Movement Pattern Function
+# -----------------------------------------------------------------------------
+
+def custom_movement_pattern(
+    robot: urx.Robot,
+    initial_cycles: int = 8,
+    tilt_angle_deg: float = 45.0,
+    initial_velocity: float = 0.75,
+    initial_acceleration: float = 1.0,
+    tilted_velocity: float = 0.5,
+    tilted_acceleration: float = 0.8,
+    tilted_cycles: int = 5,
+):
+    """Execute custom movement pattern with initial oscillations, tilt, and tilted pattern.
+    
+    Pattern sequence:
+    1. Move Z- 3cm, Y+ 3cm
+    2. Y oscillation: -6cm → +6cm × initial_cycles
+    3. Move Z- 1mm, TCP tilt +Ry tilt_angle_deg
+    4. Adjust TCP center for tilt compensation
+    5. Tilted pattern: Y+ 6cm → Z- 1mm → Y- 6cm → Z- 1mm × tilted_cycles
+    6. Return to post-tilt position and repeat tilted pattern
+    """
+    
+    # Get starting position
+    start_pose = get_tcp_pose(robot)
+    start_x, start_y, start_z = start_pose[0], start_pose[1], start_pose[2]
+    start_rx, start_ry, start_rz = start_pose[3], start_pose[4], start_pose[5]
+    
+    print(f"🔧 Starting custom movement pattern from: {start_x:.3f}, {start_y:.3f}, {start_z:.3f}")
+    
+    # Phase 1: Initial setup moves
+    print("Phase 1: Initial setup moves")
+    # Move Z- 3cm, Y+ 3cm
+    target_pose = [start_x, start_y + 0.03, start_z - 0.03, start_rx, start_ry, start_rz]
+    send_movel(robot, target_pose, acc=initial_acceleration, vel=initial_velocity)
+    wait_until_pose(robot, target_pose)
+    
+    # Phase 2: Y oscillations
+    print(f"Phase 2: Y oscillations ({initial_cycles} cycles)")
+    current_pose = get_tcp_pose(robot)
+    for cycle in range(initial_cycles):
+        print(f"  Cycle {cycle + 1}/{initial_cycles}")
+        
+        # Move Y- 6cm
+        y_neg_pose = [current_pose[0], current_pose[1] - 0.06, current_pose[2], current_pose[3], current_pose[4], current_pose[5]]
+        send_movel(robot, y_neg_pose, acc=initial_acceleration, vel=initial_velocity)
+        wait_until_pose(robot, y_neg_pose)
+        
+        # Move Y+ 6cm
+        y_pos_pose = [current_pose[0], current_pose[1] + 0.06, current_pose[2], current_pose[3], current_pose[4], current_pose[5]]
+        send_movel(robot, y_pos_pose, acc=initial_acceleration, vel=initial_velocity)
+        wait_until_pose(robot, y_pos_pose)
+    
+    # Phase 3: Z- move and tilt
+    print("Phase 3: Z- move and tilt")
+    current_pose = get_tcp_pose(robot)
+    
+    # Move Z- 1mm
+    z_down_pose = [current_pose[0], current_pose[1], current_pose[2] - 0.001, current_pose[3], current_pose[4], current_pose[5]]
+    send_movel(robot, z_down_pose, acc=initial_acceleration, vel=initial_velocity)
+    wait_until_pose(robot, z_down_pose)
+    
+    # TCP tilt +Ry by tilt_angle_deg using rotate_tcp
+    rotate_tcp(robot, ry_deg=tilt_angle_deg, acc=initial_acceleration, vel=initial_velocity)
+    
+    # Read current TCP offset and add Ry tilt to account for the tilt
+    print("Phase 4: Adjusting TCP offset to account for tilt")
+    try:
+        # Get current TCP offset using URScript query
+        tcp_offset_query = "get_tcp()"
+        result = robot.send_program(tcp_offset_query)
+        time.sleep(0.1)
+        
+        # Use the actual TCP offset values provided by user
+        print("Using actual TCP offset values...")
+        # TCP offset: (-275.68, 0, 77.94) with Rx, Ry, Rz all zeros
+        current_tcp = [-0.27568, 0.0, 0.07794, 0.0, 0.0, 0.0]  # Actual TCP offset in meters
+        
+        # Add the tilt angle to the current Ry component
+        tilt_rad = math.radians(tilt_angle_deg)
+        new_tcp_offset = [
+            current_tcp[0],  # X offset unchanged
+            current_tcp[1],  # Y offset unchanged  
+            current_tcp[2],  # Z offset unchanged
+            current_tcp[3],  # Rx unchanged
+            current_tcp[4] + tilt_rad,  # Add tilt to Ry
+            current_tcp[5]   # Rz unchanged
+        ]
+        
+        print(f"Setting new TCP offset with Ry tilt: {math.degrees(new_tcp_offset[4]):.1f}°")
+        robot.set_tcp(new_tcp_offset)
+        time.sleep(0.1)
+        
+    except Exception as e:
+        print(f"Warning: Could not adjust TCP offset: {e}")
+        print("Continuing without TCP offset adjustment...")
+    
+    # Store post-tilt position for later return
+    post_tilt_pose = get_tcp_pose(robot)
+    
+    # Calculate movement compensation for tilted movements
+    print("Calculating movement compensation for tilt")
+    tilt_rad = math.radians(tilt_angle_deg)
+    z_offset = 0.001 * math.sin(tilt_rad)  # approximate compensation
+    x_offset = 0.001 * (1 - math.cos(tilt_rad))  # approximate compensation
+    print(f"  Movement compensation: x_offset={x_offset*1000:.3f}mm, z_offset={z_offset*1000:.3f}mm")
+    
+    # Phase 5: Tilted pattern execution
+    print(f"Phase 5: Tilted pattern ({tilted_cycles} cycles)")
+    current_tilted_pose = post_tilt_pose.copy()
+    
+    def execute_tilted_cycle():
+        nonlocal current_tilted_pose
+        
+        # Forward pattern: Y+ 6cm → Z- 1mm → Y- 6cm → Z- 1mm
+        print("      🔹 Forward pattern start")
+        
+        # Y+ 6cm (accounting for tilt)
+        print("        Step 1/8: Y+ 6cm")
+        y_pos_tilted = [current_tilted_pose[0], current_tilted_pose[1] + 0.06, current_tilted_pose[2], 
+                       current_tilted_pose[3], current_tilted_pose[4], current_tilted_pose[5]]
+        send_movel(robot, y_pos_tilted, acc=tilted_acceleration, vel=tilted_velocity)
+        wait_until_pose(robot, y_pos_tilted)
+        
+        # Z- 1mm (adjusted for tilt)
+        print("        Step 2/8: Z- 1mm")
+        z_down_tilted_1 = [y_pos_tilted[0] + x_offset, y_pos_tilted[1], y_pos_tilted[2] - z_offset, 
+                          y_pos_tilted[3], y_pos_tilted[4], y_pos_tilted[5]]
+        send_movel(robot, z_down_tilted_1, acc=tilted_acceleration, vel=tilted_velocity)
+        wait_until_pose(robot, z_down_tilted_1)
+        
+        # Y- 6cm (accounting for tilt)
+        print("        Step 3/8: Y- 6cm")
+        y_neg_tilted = [z_down_tilted_1[0], z_down_tilted_1[1] - 0.06, z_down_tilted_1[2], 
+                       z_down_tilted_1[3], z_down_tilted_1[4], z_down_tilted_1[5]]
+        send_movel(robot, y_neg_tilted, acc=tilted_acceleration, vel=tilted_velocity)
+        wait_until_pose(robot, y_neg_tilted)
+        
+        # Z- 1mm (adjusted for tilt)
+        print("        Step 4/8: Z- 1mm")
+        z_down_tilted_2 = [y_neg_tilted[0] + x_offset, y_neg_tilted[1], y_neg_tilted[2] - z_offset, 
+                          y_neg_tilted[3], y_neg_tilted[4], y_neg_tilted[5]]
+        send_movel(robot, z_down_tilted_2, acc=tilted_acceleration, vel=tilted_velocity)
+        wait_until_pose(robot, z_down_tilted_2)
+        
+        # Reverse pattern: Z+ 1mm → Y+ 6cm → Z+ 1mm → Y- 6cm (back to start)
+        print("      🔸 Reverse pattern start (returning to start)")
+        
+        # Z+ 1mm (reverse of last Z- move)
+        print("        Step 5/8: Z+ 1mm (reverse)")
+        z_up_tilted_1 = [z_down_tilted_2[0] - x_offset, z_down_tilted_2[1], z_down_tilted_2[2] + z_offset, 
+                         z_down_tilted_2[3], z_down_tilted_2[4], z_down_tilted_2[5]]
+        send_movel(robot, z_up_tilted_1, acc=tilted_acceleration, vel=tilted_velocity)
+        wait_until_pose(robot, z_up_tilted_1)
+        
+        # Y+ 6cm (reverse of Y- move)
+        print("        Step 6/8: Y+ 6cm (reverse)")
+        y_pos_tilted_return = [z_up_tilted_1[0], z_up_tilted_1[1] + 0.06, z_up_tilted_1[2], 
+                              z_up_tilted_1[3], z_up_tilted_1[4], z_up_tilted_1[5]]
+        send_movel(robot, y_pos_tilted_return, acc=tilted_acceleration, vel=tilted_velocity)
+        wait_until_pose(robot, y_pos_tilted_return)
+        
+        # Z+ 1mm (reverse of first Z- move)
+        print("        Step 7/8: Z+ 1mm (reverse)")
+        z_up_tilted_2 = [y_pos_tilted_return[0] - x_offset, y_pos_tilted_return[1], y_pos_tilted_return[2] + z_offset, 
+                         y_pos_tilted_return[3], y_pos_tilted_return[4], y_pos_tilted_return[5]]
+        send_movel(robot, z_up_tilted_2, acc=tilted_acceleration, vel=tilted_velocity)
+        wait_until_pose(robot, z_up_tilted_2)
+        
+        # Y- 6cm (reverse of first Y+ move, back to starting position)
+        print("        Step 8/8: Y- 6cm (back to start)")
+        current_tilted_pose = [z_up_tilted_2[0], z_up_tilted_2[1] - 0.06, z_up_tilted_2[2], 
+                              z_up_tilted_2[3], z_up_tilted_2[4], z_up_tilted_2[5]]
+        send_movel(robot, current_tilted_pose, acc=tilted_acceleration, vel=tilted_velocity)
+        wait_until_pose(robot, current_tilted_pose)
+        
+        print("      ✅ Complete cycle finished (forward + reverse)")
+    
+    # Execute tilted cycles
+    for cycle in range(tilted_cycles):
+        print(f"🔄 Starting tilted cycle {cycle + 1}/{tilted_cycles}")
+        try:
+            execute_tilted_cycle()
+            print(f"✅ Completed tilted cycle {cycle + 1}/{tilted_cycles}")
+        except Exception as e:
+            print(f"❌ Error in tilted cycle {cycle + 1}: {e}")
+            break
+    
+    print("🎯 Custom movement pattern completed!")

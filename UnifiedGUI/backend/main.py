@@ -106,6 +106,9 @@ class ConicalSprayRequest(BaseModel):
 class SpiralSprayRequest(BaseModel):
     spiral_params: str  # JSON string containing spiral parameters
 
+class CustomPatternRequest(BaseModel):
+    pattern_params: str  # JSON string containing custom pattern parameters
+
 # Allow all origins for local setup (laptop-only deployment)
 app.add_middleware(
     CORSMiddleware,
@@ -817,6 +820,12 @@ async def execute_conical_spray_paths(request: ConicalSprayRequest):
                 return {"success": False, "error": f"Path {i+1} missing required fields (tilt, rev, cycle)"}
             if not all(isinstance(path[key], (int, float)) for key in ['tilt', 'rev', 'cycle']):
                 return {"success": False, "error": f"Path {i+1} fields must be numeric"}
+            # validate approach_time if present (only allowed for first path)
+            if 'approach_time' in path:
+                if i > 0:
+                    return {"success": False, "error": f"approach_time only allowed for first path"}
+                if not isinstance(path['approach_time'], (int, float)):
+                    return {"success": False, "error": f"approach_time must be numeric"}
         
         result = robot_controller.execute_conical_spray_paths(spray_paths)
         return result
@@ -847,6 +856,8 @@ async def execute_spiral_spray(request: SpiralSprayRequest):
         spiral_params.setdefault('cycle_s_start', None)
         spiral_params.setdefault('cycle_s_end', None) 
         spiral_params.setdefault('invert_tilt', False)
+        spiral_params.setdefault('approach_time_s', 0.5)
+        spiral_params.setdefault('delta_x_mm', 0.0)
         
         result = robot_controller.execute_spiral_spray(spiral_params)
         return result
@@ -855,6 +866,31 @@ async def execute_spiral_spray(request: SpiralSprayRequest):
         return {"success": False, "error": "Invalid JSON format for spiral parameters"}
     except Exception as e:
         return {"success": False, "error": f"Failed to parse spiral parameters: {str(e)}"}
+
+
+@app.post("/api/robot/custom-pattern")
+async def execute_custom_pattern(request: CustomPatternRequest):
+    if robot_controller is None:
+        return {"success": False, "error": "Robot controller not available"}
+    
+    try:
+        import json
+        pattern_params = json.loads(request.pattern_params)
+        
+        required_fields = ['initial_cycles', 'tilt_angle_deg', 'initial_velocity', 'initial_acceleration', 'tilted_velocity', 'tilted_acceleration', 'tilted_cycles']
+        for field in required_fields:
+            if field not in pattern_params:
+                return {"success": False, "error": f"Missing required field: {field}"}
+            if not isinstance(pattern_params[field], (int, float)):
+                return {"success": False, "error": f"Field {field} must be numeric"}
+        
+        result = robot_controller.execute_custom_pattern(pattern_params)
+        return result
+        
+    except json.JSONDecodeError:
+        return {"success": False, "error": "Invalid JSON format for pattern parameters"}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to parse pattern parameters: {str(e)}"}
 
 
 if __name__ == "__main__":
