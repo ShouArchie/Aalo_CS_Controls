@@ -1,8 +1,3 @@
-"""
-Robot Control Integration for UnifiedGUI
-Integrates the UR Control Code system with FastAPI backend
-"""
-
 import sys
 import os
 import threading
@@ -813,22 +808,29 @@ blended_spray()
     
     def _execute_custom_pattern_background(self, pattern_params: dict):
         try:
-            print(f"🔧 Executing custom movement pattern in background thread")
-            print(f"   ↳ Initial cycles: {pattern_params['initial_cycles']}")
+            print(f"🔧 Executing custom rectangle pattern in background thread")
+            print(f"   ↳ Width: {pattern_params['width_mm']}mm, Height: {pattern_params['height_mm']}mm")
+            print(f"   ↳ Initial repetitions: {pattern_params['initial_repetitions']}")
+            print(f"   ↳ Step size: {pattern_params['step_size_mm']}mm")
             print(f"   ↳ Tilt angle: {pattern_params['tilt_angle_deg']}°")
             print(f"   ↳ Initial vel/acc: {pattern_params['initial_velocity']}/{pattern_params['initial_acceleration']}")
-            print(f"   ↳ Tilted vel/acc: {pattern_params['tilted_velocity']}/{pattern_params['tilted_acceleration']}")
-            print(f"   ↳ Tilted cycles: {pattern_params['tilted_cycles']}")
+            print(f"   ↳ Rectangle vel/acc: {pattern_params['rect_velocity']}/{pattern_params['rect_acceleration']}")
+            print(f"   ↳ Blend radius: {pattern_params['blend_radius_mm']}mm")
+            print(f"   ↳ Rectangle repetitions: {pattern_params['rect_repetitions']}")
             
-            rf.custom_movement_pattern(
+            rf.custom_rectangle_pattern(
                 self.robot_controller.robot,
-                initial_cycles=pattern_params['initial_cycles'],
+                width_mm=pattern_params['width_mm'],
+                height_mm=pattern_params['height_mm'],
+                initial_repetitions=pattern_params['initial_repetitions'],
+                step_size_mm=pattern_params['step_size_mm'],
                 tilt_angle_deg=pattern_params['tilt_angle_deg'],
                 initial_velocity=pattern_params['initial_velocity'],
                 initial_acceleration=pattern_params['initial_acceleration'],
-                tilted_velocity=pattern_params['tilted_velocity'],
-                tilted_acceleration=pattern_params['tilted_acceleration'],
-                tilted_cycles=pattern_params['tilted_cycles']
+                rect_velocity=pattern_params['rect_velocity'],
+                rect_acceleration=pattern_params['rect_acceleration'],
+                blend_radius_mm=pattern_params['blend_radius_mm'],
+                rect_repetitions=pattern_params['rect_repetitions']
             )
             
             time.sleep(1.5)

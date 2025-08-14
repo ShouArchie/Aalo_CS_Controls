@@ -118,10 +118,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ------------------------------------------------------------------
-# Generic OpenCV camera stream (used for RGB webcam)
-# ------------------------------------------------------------------
 class CameraStream:
     """High-performance camera stream with optimized threading and minimal latency."""
 
@@ -877,7 +873,7 @@ async def execute_custom_pattern(request: CustomPatternRequest):
         import json
         pattern_params = json.loads(request.pattern_params)
         
-        required_fields = ['initial_cycles', 'tilt_angle_deg', 'initial_velocity', 'initial_acceleration', 'tilted_velocity', 'tilted_acceleration', 'tilted_cycles']
+        required_fields = ['width_mm', 'height_mm', 'initial_repetitions', 'step_size_mm', 'tilt_angle_deg', 'initial_velocity', 'initial_acceleration', 'rect_velocity', 'rect_acceleration', 'blend_radius_mm', 'rect_repetitions']
         for field in required_fields:
             if field not in pattern_params:
                 return {"success": False, "error": f"Missing required field: {field}"}
