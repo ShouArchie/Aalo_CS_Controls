@@ -159,7 +159,7 @@ export default function ViewsPage() {
               Camera Views & Monitoring
             </h1>
             <div className="text-xs text-text-secondary font-mono">
-              SYS.ONLINE | AUTH.GRANTED
+              GOOD LUCK TEAM!!!
             </div>
           </div>
           
