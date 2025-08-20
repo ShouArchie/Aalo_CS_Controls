@@ -388,9 +388,9 @@ def init_rgb_camera_with_retry(max_attempts=1) -> CameraStream | None:
     print(f"🔄 Attempting to initialize RGB camera (max {max_attempts} attempts)...")
     
     configs = [
-        (1, 60, "high"),  # Preferred: index 1, 60fps, high priority
-        (1, 30, "high"),  # Fallback: index 1, 30fps, high priority
-        (0, 30, "normal"), # Fallback: index 0, 30fps, normal priority
+        (0, 60, "high"),  # Preferred: index 1, 60fps, high priority
+        (0, 30, "high"),  # Fallback: index 1, 30fps, high priority
+        (1, 30, "normal"), # Fallback: index 0, 30fps, normal priority
         (2, 30, "normal"), # Fallback: index 2, 30fps, normal priority
     ]
     

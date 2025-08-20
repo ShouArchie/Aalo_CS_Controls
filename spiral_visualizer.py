@@ -9,13 +9,17 @@ from typing import List, Tuple
 from spray_test_V1_spiral import (
     ROBOT_IP, TCP_OFFSET_MM, TILT_START_DEG, TILT_END_DEG, R_START_MM, R_END_MM, 
     REVS, STEPS_PER_REV, SING_TOL_DEG, CYCLE_S, LOOKAHEAD_S, GAIN,
-    CYCLE_S_START, CYCLE_S_END, home
+    CYCLE_S_START, CYCLE_S_END, PHASE_OFFSET_DEG, home
 )
 
 # Import robot functions
 from UR_Cold_Spray_Code import robot_functions as rf
 
-def capture_robot_spiral_positions(robot: urx.Robot, invert_tilt: bool = False) -> Tuple[List[Tuple[float, float, float]], List[float]]:
+def capture_robot_spiral_positions(
+    robot: urx.Robot,
+    invert_tilt: bool = False,
+    phase_offset_deg: float = 0.0,
+) -> Tuple[List[Tuple[float, float, float]], List[float], List[float]]:
     """Capture actual robot TCP positions during spiral execution."""
     
     positions = []
@@ -95,7 +99,7 @@ def capture_robot_spiral_positions(robot: urx.Robot, invert_tilt: bool = False) 
             current_cycle_s = CYCLE_S * 3  # 3x slower for better visualization
         
         # Phase with optional offset
-        phi_deg = (step / STEPS_PER_REV) * 360.0
+        phi_deg = (step / STEPS_PER_REV) * 360.0 + phase_offset_deg
         phi = math.radians(phi_deg)
         
         # Skip near 90° and 270° (wrap-safe)
@@ -256,7 +260,7 @@ def capture_robot_spiral_positions(robot: urx.Robot, invert_tilt: bool = False) 
     print(f"Captured {len(positions)} positions and {len(angles_from_start)} angles")
     return positions, angles_from_start, theoretical_angles
 
-def plot_spiral(run_both_orientations=False):
+def plot_spiral(run_both_orientations: bool = False, phase_offset_deg: float = 0.0):
     """Connect to robot, execute spiral, and plot actual positions."""
     
     print("Connecting to robot...")
@@ -287,8 +291,8 @@ def plot_spiral(run_both_orientations=False):
         print(f"Rotated TCP orientation: Rx={math.degrees(rotated_pose[3]):.2f}°, Ry={math.degrees(rotated_pose[4]):.2f}°, Rz={math.degrees(rotated_pose[5]):.2f}°")
         
         # Capture normal tilt spiral from this rotated starting position
-        print("Executing normal tilt spiral from rotated starting position...")
-        points_normal, angles_normal, theoretical_angles_normal = capture_robot_spiral_positions(robot, invert_tilt=False)
+        print(f"Executing normal tilt spiral from rotated starting position (phase_offset={phase_offset_deg}°)...")
+        points_normal, angles_normal, theoretical_angles_normal = capture_robot_spiral_positions(robot, invert_tilt=False, phase_offset_deg=phase_offset_deg)
         
         points_inverted = []
         angles_inverted = []
@@ -300,8 +304,8 @@ def plot_spiral(run_both_orientations=False):
             time.sleep(1.0)
             
             # Capture inverted tilt spiral
-            print("Executing inverted tilt spiral...")
-            points_inverted, angles_inverted, theoretical_angles_inverted = capture_robot_spiral_positions(robot, invert_tilt=True)
+            print(f"Executing inverted tilt spiral (phase_offset={phase_offset_deg}°)...")
+            points_inverted, angles_inverted, theoretical_angles_inverted = capture_robot_spiral_positions(robot, invert_tilt=True, phase_offset_deg=phase_offset_deg)
         
     finally:
         robot.close()
@@ -433,6 +437,7 @@ def plot_spiral(run_both_orientations=False):
     print(f"  Start radius: {R_START_MM} mm")
     print(f"  End radius: {R_END_MM} mm")
     print(f"  Total captured points: {len(points_normal)}")
+    print(f"  Phase offset (deg): {phase_offset_deg}")
     if points_inverted:
         print(f"  Total inverted points: {len(points_inverted)}")
     print(f"  X range: {min(x_normal):.6f} to {max(x_normal):.6f} (variation: {max(x_normal)-min(x_normal):.6f})")
@@ -442,4 +447,4 @@ def plot_spiral(run_both_orientations=False):
     plt.show()
 
 if __name__ == "__main__":
-    plot_spiral(run_both_orientations=True)
+    plot_spiral(run_both_orientations=True, phase_offset_deg=90)

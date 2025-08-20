@@ -1,5 +1,3 @@
-😔
-
 1. Under UnifiedGUI\frontend\lib, update config.ts to have selected IP address (do ipconfig in cmd and select the port in either ethernet or wifi)
 2. cd .\UnifiedGUI\frontend\
 3. npm run dev:network
@@ -20,6 +18,6 @@ If you get AttributeError: 'PoseVector' object has no attribute 'tolist', you di
 
 Unified GUI has the typescript webserver, with fastapi backend that CALLS robot_functions in UR_Cold_Spray_Code folder. Python GUI includes the camera backend that calls HTI thermal camera. UR_Control_Code has things regarding space mouse and thermal tracking in 2D plane view. Sorry Russel. Wish I could have kept it cleaner but we worked on it too seperately and design changes were made too often to make a finalized setup for the UR + Kuka. 
 
-
-
 Adios muchachos.
+
+- Archie Shou, Summer Intern 2025
